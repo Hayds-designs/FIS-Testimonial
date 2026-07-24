@@ -1,0 +1,733 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>FIS — Floating testimonials</title>
+<style>
+/* ============================================================
+   Roobert typeface
+   ------------------------------------------------------------
+   Drop-in slots: place the supplied final files here and they
+   load automatically — no CSS changes needed.
+       fonts/Roobert-Light.woff2    (300)
+       fonts/Roobert-Regular.woff2  (400)
+       fonts/Roobert-Medium.woff2   (500)
+   Until those exist, the browser falls through to the bundled
+   trial variable font, then to a system sans stack.
+   ============================================================ */
+@font-face{
+  font-family:'Roobert';
+  src:url('fonts/Roobert-Light.woff2') format('woff2');
+  font-weight:300; font-style:normal; font-display:swap;
+}
+@font-face{
+  font-family:'Roobert';
+  src:url('fonts/Roobert-Regular.woff2') format('woff2');
+  font-weight:400; font-style:normal; font-display:swap;
+}
+@font-face{
+  font-family:'Roobert';
+  src:url('fonts/Roobert-Medium.woff2') format('woff2');
+  font-weight:500; font-style:normal; font-display:swap;
+}
+/* Live trial face so the prototype renders in Roobert today. */
+@font-face{
+  font-family:'Roobert Trial VF';
+  src:url('fonts/Roobert-Trial-VF.woff2') format('woff2');
+  font-weight:300 900; font-style:normal; font-display:swap;
+}
+
+/* ============================================================
+   Component scope — everything lives under .fis-testimonial
+   so nothing leaks into a host page.
+   ============================================================ */
+.fis-testimonial{
+  /* Light theme: dark content on a light surface. */
+  --ink:#1d1f48;           /* navy — headings, quotes, names */
+  --muted:#5b5d74;         /* softened navy for subtext */
+  --green:#4bcd3e;         /* accent: rings, glow, cursor dot/button */
+  --green-ink:#2f9e28;     /* deeper green for role text (legible on light) */
+  --green-deep:#22781d;    /* darkest green for the cursor label */
+  --violet:#1d1f48;        /* navy — quote mark, Listen button + waveform */
+  --blue:#2e70e0;          /* secondary gradient tint */
+  --white:#ffffff;
+  --ring-gap:#ffffff;      /* separates the active ring from the photo */
+  --disc:#e4e6ee;          /* light placeholder before a photo loads */
+  --disc-edge:#d0d3df;
+
+  --font:'Roobert','Roobert Trial VF',-apple-system,BlinkMacSystemFont,
+         'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+
+  --pop-dur:600ms;
+  --pop-step:110ms;        /* stagger between circles on load */
+  --nudge:11px;            /* how far the active disc pulls inward */
+
+  font-family:var(--font);
+  box-sizing:border-box;
+  width:100%;
+  height:100%;
+  display:flex;
+  justify-content:center;
+}
+.fis-testimonial *,
+.fis-testimonial *::before,
+.fis-testimonial *::after{ box-sizing:border-box; }
+
+/* ---- The panel (fills the viewport, rounded, light gradient) - */
+.fis-panel{
+  position:relative;
+  width:100%;
+  height:100%;                      /* fit to whatever screen it's viewed on */
+  border-radius:26px;
+  overflow:hidden;
+  background:
+    radial-gradient(120% 90% at 82% 10%, rgba(75,205,62,0.16), transparent 46%),
+    radial-gradient(120% 120% at 8% 98%, rgba(46,112,224,0.15), transparent 52%),
+    linear-gradient(150deg,#ffffff 0%, #f3f4f9 46%, #e8eaf2 100%);
+  box-shadow:0 40px 90px -50px rgba(29,31,72,0.45);
+  isolation:isolate;
+}
+
+/* ---- Brand logo, top-centre --------------------------------- */
+.fis-logo{
+  position:absolute; top:28px; left:50%; transform:translateX(-50%);
+  height:40px; width:auto; z-index:4; pointer-events:none;
+}
+
+/* ---- Centre content (no card background — text floats on the panel) - */
+.fis-stage{
+  position:absolute; top:50%; left:50%;
+  transform:translate(-50%,-50%);
+  z-index:2;
+  width:min(62%,600px);
+  text-align:center;
+  padding:26px 30px;
+  pointer-events:none;              /* only the Listen button is clickable */
+}
+.fis-stage .fis-player{ pointer-events:auto; }
+.fis-stage__inner{
+  transition:opacity .22s ease, transform .22s ease;
+}
+.fis-stage__inner.is-leaving{ opacity:0; transform:translateY(-8px); }
+.fis-stage__inner.is-entering{ opacity:0; transform:translateY(12px); transition:none; }
+
+.fis-quote-mark{ display:inline-block; line-height:0; margin-bottom:14px; }
+.fis-quote-mark svg{ height:20px; width:auto; display:block; fill:var(--violet); }
+
+.fis-heading{
+  margin:0; color:var(--ink);
+  font-weight:300; letter-spacing:-0.01em; line-height:1.12;
+  font-size:clamp(1.35rem,2.6vw,2.15rem);
+}
+.fis-sub{
+  margin:14px 0 0; color:var(--muted);
+  font-weight:400; line-height:1.5;
+  font-size:clamp(0.82rem,1.15vw,0.98rem);
+}
+
+.fis-quote{
+  margin:0; color:var(--ink);
+  font-weight:300; letter-spacing:-0.01em;
+  line-height:1.34;
+  font-size:clamp(1.2rem,2.5vw,1.95rem);
+}
+/* While the audio "plays", words light up in sequence (karaoke-style). */
+.fis-quote .fis-word{ transition:color .4s ease; }
+.fis-quote.is-listening .fis-word{ color:rgba(29,31,72,0.26); }
+.fis-quote.is-listening .fis-word.is-spoken{ color:var(--ink); }
+.fis-attr{ margin-top:20px; display:flex; flex-direction:column; gap:3px; }
+.fis-name{
+  color:var(--ink); font-weight:500;
+  font-size:clamp(0.9rem,1.3vw,1.02rem);
+}
+.fis-role{
+  color:var(--green-ink); font-weight:500; letter-spacing:0.02em;
+  font-size:clamp(0.72rem,1vw,0.82rem);
+  text-transform:uppercase;
+}
+
+/* Mode toggling inside the safe zone */
+.fis-stage__inner[data-mode="intro"] .fis-quote-mark,
+.fis-stage__inner[data-mode="intro"] .fis-quote,
+.fis-stage__inner[data-mode="intro"] .fis-attr,
+.fis-stage__inner[data-mode="intro"] .fis-player{ display:none; }
+.fis-stage__inner[data-mode="quote"] .fis-heading,
+.fis-stage__inner[data-mode="quote"] .fis-sub{ display:none; }
+
+/* ---- Audio player: just a round play button at rest. On play the button
+       slides left and a rippling waveform grows in beside it. ---------- */
+.fis-player{
+  margin-top:26px;
+  display:inline-flex; align-items:center; gap:0;   /* centred via parent text-align */
+  transition:gap .3s ease;
+}
+.fis-player.is-open{ gap:14px; }
+.fis-player__btn{
+  -webkit-appearance:none; appearance:none; border:0; cursor:pointer;
+  flex:none; width:40px; height:40px; border-radius:50%;
+  background:var(--violet); display:grid; place-items:center;
+  box-shadow:0 7px 16px -7px rgba(29,31,72,0.6);
+  transition:transform .15s ease;
+}
+.fis-player__btn:hover{ transform:translateY(-1px); }
+.fis-player__btn svg{ width:13px; height:13px; fill:#fff; display:block; }
+.fis-player__btn .fis-ic-play{ margin-left:2px; }        /* optical centering */
+.fis-player__btn .fis-ic-pause{ display:none; }
+.fis-player.is-playing .fis-player__btn .fis-ic-play{ display:none; }
+.fis-player.is-playing .fis-player__btn .fis-ic-pause{ display:block; margin-left:0; }
+/* the waveform: collapsed at rest, grows in on play */
+.fis-player__wave{
+  display:flex; align-items:center; gap:2px;
+  height:32px; width:320px; max-width:0; opacity:0; overflow:hidden;
+  transition:max-width .38s cubic-bezier(.4,0,.2,1), opacity .3s ease;
+}
+.fis-player.is-open .fis-player__wave{ max-width:320px; opacity:1; }
+.fis-player__bar{
+  flex:1 1 auto; height:4px; border-radius:2px;
+  background:rgba(29,31,72,0.22);
+}
+.fis-player__bar.is-on{ background:var(--violet); }
+
+/* ---- Cursor follower: a green dot trailing the pointer that expands
+       into a "Meet [name]" button over a profile. Trails the native
+       cursor (it does not replace it). --------------------------------- */
+.fis-cursor{
+  position:absolute; top:0; left:0; z-index:5;
+  transform:translate(var(--cx,-200px), var(--cy,-200px));
+  opacity:0; transition:opacity .2s ease;
+  pointer-events:none;                /* never blocks clicks on discs */
+  will-change:transform;
+}
+.fis-cursor.is-visible{ opacity:1; }
+/* Sits below-right of the native pointer so both stay visible. */
+.fis-cursor__pill{
+  position:absolute; left:16px; top:16px;
+  display:flex; align-items:center;
+  width:auto; min-width:12px; max-width:12px; height:12px; padding:0;
+  border-radius:999px; background:var(--green);
+  overflow:hidden; white-space:nowrap;
+  box-shadow:0 3px 10px rgba(75,205,62,0.4);
+  transition:max-width .28s cubic-bezier(.4,0,.2,1),
+             height .22s ease, padding .22s ease, top .22s ease;
+}
+.fis-cursor__label{
+  color:#fff; font-weight:500; font-size:0.82rem; letter-spacing:0.01em;
+  opacity:0; transition:opacity .18s ease;
+}
+/* Expanded button state on profile hover. */
+.fis-cursor.is-hover .fis-cursor__pill{
+  height:34px; max-width:260px; padding:0 16px; top:5px;
+}
+.fis-cursor.is-hover .fis-cursor__label{ opacity:1; }
+/* Expand leftward when near the right edge. */
+.fis-cursor.flip .fis-cursor__pill{ left:auto; right:16px; }
+
+/* ---- Orbit nodes (the scattered circles) -------------------- */
+/* Sits below the quote card (z-index 2) so any circle that drifts
+   toward the centre tucks neatly behind it. */
+.fis-orbit{ position:absolute; inset:0; z-index:1; }
+
+/* Position is driven by JS physics (transform on .fis-node); the inner
+   layers own pop-in scale and hover/active scale so nothing collides. */
+.fis-node{
+  position:absolute; left:0; top:0;
+  width:var(--size); height:var(--size);
+  will-change:transform;
+}
+/* pop-in wrapper (runs once on load) */
+.fis-node__pop{
+  width:100%; height:100%;
+  opacity:0; transform:scale(0.6);
+  animation:fis-pop var(--pop-dur) cubic-bezier(.34,1.56,.64,1) forwards;
+  animation-delay:var(--pop-delay);
+}
+/* the visible avatar disc */
+.fis-node__disc{
+  position:relative;
+  width:100%; height:100%; border-radius:50%;
+  overflow:hidden;                                     /* clips the video to a circle */
+  background:radial-gradient(120% 120% at 32% 28%,var(--disc),var(--disc-edge));
+  cursor:pointer;
+  transition:transform .3s ease, box-shadow .3s ease;
+  box-shadow:0 12px 26px -14px rgba(29,31,72,0.55);
+}
+.fis-node__video{
+  position:absolute; inset:0;
+  width:100%; height:100%;
+  object-fit:cover;                                    /* fill the circle */
+  display:block; pointer-events:none;                  /* disc handles events */
+  transition:opacity .8s ease;                         /* crossfade at loop seam */
+}
+.fis-node__disc:hover{ transform:scale(1.07); }
+.fis-node.is-active .fis-node__disc{
+  transform:scale(1.12);
+  box-shadow:0 0 0 3px var(--ring-gap),
+             0 0 0 5px var(--green),
+             0 0 24px 3px rgba(75,205,62,0.55);
+}
+@keyframes fis-pop{
+  from{ opacity:0; transform:scale(0.6); }
+  to{ opacity:1; transform:scale(1); }
+}
+
+/* ============================================================
+   Mobile fallback (< 640px): drop the scatter, stack a simple
+   row of circles beneath the quote.
+   ============================================================ */
+@media (max-width:640px){
+  .fis-panel{
+    min-height:0;
+    display:flex; flex-direction:column;
+    justify-content:center; align-items:center;
+    padding:36px 20px 30px;
+    gap:26px;
+    cursor:auto;
+  }
+  .fis-cursor{ display:none; }
+  .fis-stage{
+    position:static; transform:none;
+    width:100%; max-width:420px;
+    padding:0;
+  }
+  .fis-orbit{
+    position:static; inset:auto;
+    display:flex; flex-wrap:wrap; gap:14px;
+    justify-content:center; align-items:center;
+  }
+  .fis-node{
+    position:static;
+    left:auto; top:auto; margin:0;
+    /* Fixed px (beats each node's inline --size) for a tidy, uniform row. */
+    width:58px; height:58px;
+  }
+}
+
+/* ============================================================
+   Reduced motion — cheap courtesy: no pop, no float, no draw.
+   ============================================================ */
+@media (prefers-reduced-motion:reduce){
+  .fis-node__pop{ animation:none; opacity:1; transform:none; }
+  .fis-stage__inner{ transition:opacity .2s ease; }
+  .fis-stage__inner.is-leaving{ transform:none; }
+  .fis-stage__inner.is-entering{ transform:none; }
+}
+
+/* Standalone review page framing (not part of the component) */
+html,body{ height:100%; }
+body{
+  margin:0;
+  background:#d5d7e3;
+  display:flex; align-items:stretch; justify-content:center;
+  padding:14px;
+  box-sizing:border-box;
+}
+</style>
+</head>
+<body>
+
+<div class="fis-testimonial">
+  <div class="fis-panel" id="fisPanel">
+    <img class="fis-logo" src="images/fis-logo.svg" alt="FIS" />
+
+    <div class="fis-stage">
+      <div class="fis-stage__inner" id="fisInner" data-mode="intro">
+        <span class="fis-quote-mark" aria-hidden="true">
+          <svg viewBox="0 0 512 379.51"><path d="M212.27 33.98C131.02 56.52 78.14 103.65 64.99 185.67c-3.58 22.32 1.42 5.46 16.55-5.86 49.4-36.96 146.53-23.88 160.01 60.56 27.12 149.48-159.79 175.36-215.11 92.8-12.87-19.19-21.39-41.59-24.46-66.19C-11.35 159.99 43.48 64.7 139.8 19.94c17.82-8.28 36.6-14.76 56.81-19.51 10.12-2.05 17.47 3.46 20.86 12.77 2.87 7.95 3.85 16.72-5.2 20.78zm267.78 0c-81.25 22.54-134.14 69.67-147.28 151.69-3.58 22.32 1.42 5.46 16.55-5.86 49.4-36.96 146.53-23.88 160 60.56 27.13 149.48-159.78 175.36-215.1 92.8-12.87-19.19-21.39-41.59-24.46-66.19C256.43 159.99 311.25 64.7 407.58 19.94 425.4 11.66 444.17 5.18 464.39.43c10.12-2.05 17.47 3.46 20.86 12.77 2.87 7.95 3.85 16.72-5.2 20.78z"/></svg>
+        </span>
+        <blockquote class="fis-quote" id="fisQuote"></blockquote>
+        <div class="fis-attr">
+          <span class="fis-name" id="fisName"></span>
+          <span class="fis-role" id="fisRole"></span>
+        </div>
+        <div class="fis-player" id="fisPlayer">
+          <button class="fis-player__btn" id="fisPlayBtn" type="button" aria-label="Play">
+            <svg class="fis-ic-play" viewBox="0 0 12 14" aria-hidden="true"><path d="M0 0l12 7L0 14z"/></svg>
+            <svg class="fis-ic-pause" viewBox="0 0 12 14" aria-hidden="true"><rect x="1" y="0" width="3.5" height="14" rx="1"/><rect x="7.5" y="0" width="3.5" height="14" rx="1"/></svg>
+          </button>
+          <span class="fis-player__wave" id="fisWave" aria-hidden="true"></span>
+        </div>
+        <h2 class="fis-heading" id="fisTitle">Hear from the people at FIS</h2>
+        <p class="fis-sub" id="fisSub">Each circle is someone behind the work. Pick one to explore.</p>
+      </div>
+    </div>
+
+    <div class="fis-orbit" id="fisOrbit"></div>
+
+    <div class="fis-cursor" id="fisCursor" aria-hidden="true">
+      <span class="fis-cursor__pill"><span class="fis-cursor__label"></span></span>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  // --- Data per testimonial. `video` is the looping clip shown in the
+  //     circle (paused on a still frame until hovered or active).
+  const testimonials = [
+    { id:'payments', name:'Daniel Reyes', role:'VP, Payments Platform',
+      quote:'We move money for millions of people a day, and I still get a lift knowing a payment landed exactly when someone needed it.',
+      video:'videos/payments.mp4' },
+    { id:'banking', name:'Amara Okafor', role:'Head of Core Banking',
+      quote:'Modernising a bank’s core is rarely glamorous, but watching a decades-old system suddenly feel effortless makes it worth it.',
+      video:'videos/banking.mp4' },
+    { id:'design', name:'Kai Nakamura', role:'Lead Product Designer',
+      quote:'My job is to make something genuinely complex feel like it was always meant to be this simple. The best design here is invisible.',
+      video:'videos/design.mp4' },
+    { id:'risk', name:'Ellen Marsh', role:'Director, Risk & Data',
+      quote:'The best risk work happens quietly in the background, turning a wall of data into a decision someone can actually trust.',
+      video:'videos/risk.mp4' }
+  ];
+
+  // --- Avatar layout (parallel to testimonials): centre point in % of
+  //     the panel, disc diameter in px. Larger discs than before, still
+  //     asymmetric with varied size and distance from centre.
+  const avatarLayout = [
+    { x:15, y:29, size:230 },  // payments — featured, top-left
+    { x:84, y:23, size:176 },  // banking  — top-right
+    { x:85, y:70, size:200 },  // design   — lower-right
+    { x:18, y:76, size:152 }   // risk     — bottom-left
+  ];
+
+  const orbit     = document.getElementById('fisOrbit');
+  const inner     = document.getElementById('fisInner');
+  const quoteEl   = document.getElementById('fisQuote');
+  const nameEl    = document.getElementById('fisName');
+  const roleEl    = document.getElementById('fisRole');
+  const panel     = document.getElementById('fisPanel');
+  const cursor    = document.getElementById('fisCursor');
+  const labelEl   = cursor.querySelector('.fis-cursor__label');
+  const player    = document.getElementById('fisPlayer');
+  const playBtn   = document.getElementById('fisPlayBtn');
+
+  const clamp = (v,a,b)=> v<a?a : v>b?b : v;
+  const isMobile = ()=> window.matchMedia('(max-width:640px)').matches;
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion:reduce)').matches;
+
+  let W = 0, H = 0;
+  let activeCircle = null;
+  let quoteWords = [];              // per-word spans for the karaoke fill
+  const circles = [];
+
+  // ---- Cursor state (drives the follower + the physics repulsion) --------
+  let curX = -999, curY = -999, cursorOver = false;
+  let fx = -999, fy = -999;                         // eased follower position
+  panel.addEventListener('pointermove', (e)=>{
+    if(e.pointerType !== 'mouse') return;          // desktop pointer only
+    const r = panel.getBoundingClientRect();
+    curX = e.clientX - r.left;
+    curY = e.clientY - r.top;
+    cursorOver = true;
+    if(!cursor.classList.contains('is-visible')){ fx = curX; fy = curY; }  // snap in
+    cursor.classList.add('is-visible');
+    cursor.classList.toggle('flip', curX > r.width - 200);   // keep label on-screen
+  });
+  panel.addEventListener('pointerleave', ()=>{
+    cursorOver = false;
+    cursor.classList.remove('is-visible');
+  });
+  // Follower trails the pointer with a slight delay (eased each frame).
+  (function followTick(){
+    fx += (curX - fx) * 0.16;
+    fy += (curY - fy) * 0.16;
+    cursor.style.setProperty('--cx', fx.toFixed(1) + 'px');
+    cursor.style.setProperty('--cy', fy.toFixed(1) + 'px');
+    requestAnimationFrame(followTick);
+  })();
+  function setLabel(txt){ labelEl.textContent = txt; }
+
+  // ---- Build the avatar circles ------------------------------------------
+  function addNode(cfg){
+    const node = document.createElement('div');
+    node.className = 'fis-node';
+    node.style.setProperty('--size', cfg.size + 'px');
+    node.style.setProperty('--pop-delay', cfg.popDelay.toFixed(2) + 's');
+
+    const pop  = document.createElement('div'); pop.className = 'fis-node__pop';
+    const disc = document.createElement('div');
+    disc.className = 'fis-node__disc';
+
+    // Two stacked videos crossfade at the loop seam (no hard cut).
+    const vc = makeVideos(disc, cfg.t.video);
+
+    pop.appendChild(disc); node.appendChild(pop); orbit.appendChild(node);
+
+    const r = cfg.size / 2;
+    const c = {
+      el:node, kind:cfg.kind, t:cfg.t || null, vc, hovered:false,
+      r, mass:r*r, push:clamp(22/r, 0.22, 1.55),
+      xPct:cfg.xPct, yPct:cfg.yPct,
+      homeX:0, homeY:0, x:0, y:0, vx:0, vy:0, offX:0, offY:0,
+      phase:(circles.length * 1.7) % 6.283
+    };
+    disc.addEventListener('click', ()=> select(c));
+    disc.addEventListener('pointerenter', ()=>{
+      c.hovered = true; setLabel('Meet ' + cfg.t.name); cursor.classList.add('is-hover');
+      updateVideo(c);
+    });
+    disc.addEventListener('pointerleave', ()=>{
+      c.hovered = false; cursor.classList.remove('is-hover');
+      updateVideo(c);
+    });
+    circles.push(c);
+  }
+
+  // Play while hovered or active (quote showing); otherwise pause the frame.
+  function updateVideo(c){
+    if(!c.vc) return;
+    if(c.hovered || c === activeCircle) c.vc.play();
+    else c.vc.pause();
+  }
+
+  // Two-video crossfade controller: near the end of the front clip, the back
+  // clip starts from 0 and fades in, so looping dissolves instead of cutting.
+  const XFADE = 0.8;   // seconds, matches the CSS opacity transition
+  function makeVideos(disc, src){
+    function mk(){
+      const v = document.createElement('video');
+      v.className = 'fis-node__video';
+      v.src = src; v.muted = true; v.playsInline = true; v.preload = 'auto';
+      v.setAttribute('muted',''); v.setAttribute('playsinline','');
+      disc.appendChild(v);
+      return v;
+    }
+    const a = mk(), b = mk();
+    a.style.opacity = 1; b.style.opacity = 0;
+    a.addEventListener('loadeddata', ()=>{ try{ a.currentTime = 0; }catch(e){} }, { once:true });
+
+    let front = a, back = b, playing = false, fading = false;
+    function onTime(){
+      if(!playing || fading) return;
+      const rem = front.duration - front.currentTime;
+      if(isFinite(rem) && rem <= XFADE){
+        fading = true;
+        try{ back.currentTime = 0; }catch(e){}
+        const p = back.play(); if(p && p.catch) p.catch(()=>{});
+        back.style.opacity = 1; front.style.opacity = 0;
+        setTimeout(()=>{
+          front.pause();
+          const t = front; front = back; back = t;   // swap roles
+          fading = false;
+        }, XFADE * 1000);
+      }
+    }
+    a.addEventListener('timeupdate', onTime);
+    b.addEventListener('timeupdate', onTime);
+
+    return {
+      play(){ if(playing) return; playing = true; const p = front.play(); if(p && p.catch) p.catch(()=>{}); },
+      pause(){ playing = false; fading = false; a.pause(); b.pause(); }
+    };
+  }
+
+  function build(){
+    orbit.innerHTML = '';
+    circles.length = 0;
+    const STAGGER = 0.14;                  // clearer one-by-one pop-in
+    testimonials.forEach((t,i)=>{
+      const L = avatarLayout[i];
+      addNode({ kind:'avatar', t, size:L.size, xPct:L.x, yPct:L.y, popDelay:i*STAGGER });
+    });
+  }
+
+  // ---- Home positions & stage geometry (recomputed on resize) ------------
+  function layoutHomes(resetPos){
+    const r = panel.getBoundingClientRect();
+    W = r.width; H = r.height;
+    for(const c of circles){
+      c.homeX = c.xPct/100 * W;
+      c.homeY = c.yPct/100 * H;
+      if(resetPos){ c.x = c.homeX; c.y = c.homeY; c.vx = 0; c.vy = 0; }
+    }
+  }
+  // ---- Selection: rings the active photo. The quote card only exists on
+  //     mobile, where setContent populates it; on desktop it's the ring alone.
+  function select(c){
+    if(c === activeCircle) return;
+    const prev = activeCircle;
+    if(prev) prev.el.classList.remove('is-active');
+    activeCircle = c;
+    c.el.classList.add('is-active');
+    if(prev) updateVideo(prev);       // stop the previously active clip (unless hovered)
+    updateVideo(c);                   // play the newly active one
+    setContent('quote', c.t);
+  }
+
+  // Swap centre copy with the fade-out / slide-up-in transition.
+  function setContent(mode, t){
+    resetListen();                    // clear any in-progress playback
+    inner.classList.add('is-leaving');
+    setTimeout(()=>{
+      inner.dataset.mode = mode;
+      if(mode === 'quote' && t){
+        quoteEl.innerHTML = t.quote.split(' ')
+          .map(w => `<span class="fis-word">${w}</span>`).join(' ');
+        quoteWords = [...quoteEl.querySelectorAll('.fis-word')];
+        nameEl.textContent = t.name;
+        roleEl.textContent = t.role;
+      }
+      inner.classList.remove('is-leaving');
+      inner.classList.add('is-entering');
+      requestAnimationFrame(()=>requestAnimationFrame(()=>{
+        inner.classList.remove('is-entering');
+      }));
+    }, 180);
+  }
+
+  // ---- Physics -----------------------------------------------------------
+  const K_SPRING = 0.02, FRICTION = 0.86, CURSOR_R = 165,
+        CURSOR_STR = 2.4, IMPULSE = 0.35, GAP = 3, MAX_V = 24, DRIFT = 12;
+
+  function step(now){
+    const t = now / 1000;
+    // forces
+    for(const c of circles){
+      // gently drifting home target → always-on subtle float (mass-independent)
+      const driftX = Math.sin(t*0.45 + c.phase) * DRIFT;
+      const driftY = Math.cos(t*0.37 + c.phase*1.3) * DRIFT;
+      c.vx += (c.homeX + c.offX + driftX - c.x) * K_SPRING;
+      c.vy += (c.homeY + c.offY + driftY - c.y) * K_SPRING;
+      if(cursorOver){
+        const dx = c.x - curX, dy = c.y - curY, R = CURSOR_R + c.r;
+        const d = Math.hypot(dx,dy);
+        if(d < R){
+          const f = (1 - d/R) * CURSOR_STR * c.push, dd = d || 0.001;
+          c.vx += (dx/dd) * f; c.vy += (dy/dd) * f;
+        }
+      }
+    }
+    // collisions (every pair — cheap at this count)
+    for(let i=0;i<circles.length;i++){
+      for(let j=i+1;j<circles.length;j++){
+        const a = circles[i], b = circles[j];
+        const dx = b.x-a.x, dy = b.y-a.y, min = a.r+b.r+GAP;
+        const d = Math.hypot(dx,dy);
+        if(d < min && d > 0){
+          const nx = dx/d, ny = dy/d, overlap = min-d, tot = a.mass+b.mass;
+          a.x -= nx*overlap*(b.mass/tot); a.y -= ny*overlap*(b.mass/tot);
+          b.x += nx*overlap*(a.mass/tot); b.y += ny*overlap*(a.mass/tot);
+          a.vx -= nx*IMPULSE*b.push*0.5; a.vy -= ny*IMPULSE*b.push*0.5;
+          b.vx += nx*IMPULSE*a.push*0.5; b.vy += ny*IMPULSE*a.push*0.5;
+        } else if(d === 0){ a.x -= 1; b.x += 1; }
+      }
+    }
+    // integrate + soft walls + write transforms
+    for(const c of circles){
+      c.vx *= FRICTION; c.vy *= FRICTION;
+      c.vx = clamp(c.vx,-MAX_V,MAX_V); c.vy = clamp(c.vy,-MAX_V,MAX_V);
+      c.x += c.vx; c.y += c.vy;
+      if(c.x < c.r){ c.x = c.r; c.vx *= -0.4; }
+      else if(c.x > W-c.r){ c.x = W-c.r; c.vx *= -0.4; }
+      if(c.y < c.r){ c.y = c.r; c.vy *= -0.4; }
+      else if(c.y > H-c.r){ c.y = H-c.r; c.vy *= -0.4; }
+      c.el.style.transform = `translate(${(c.x-c.r).toFixed(2)}px, ${(c.y-c.r).toFixed(2)}px)`;
+    }
+    rafId = requestAnimationFrame(step);
+  }
+
+  let rafId = null;
+  function startLoop(){ if(rafId == null) rafId = requestAnimationFrame(step); }
+  function stopLoop(){ if(rafId != null){ cancelAnimationFrame(rafId); rafId = null; } }
+  function writeStatic(){                              // reduced-motion: place once
+    for(const c of circles) c.el.style.transform = `translate(${c.x-c.r}px, ${c.y-c.r}px)`;
+  }
+  function clearTransforms(){ for(const c of circles) c.el.style.transform = ''; }
+
+  // ---- Audio player: progress line → rippling waveform (no real audio) ----
+  const BAR_COUNT = 48, LISTEN_DUR = 20000;   // ~20s of pretend playback
+  const bars = [], baseShape = [];
+  for(let i=0;i<BAR_COUNT;i++){
+    // A calm, voice-like waveform shape (deterministic, 0.22–1).
+    const env = Math.sin((i/(BAR_COUNT-1)) * Math.PI);
+    const detail = 0.55 + 0.45*Math.abs(Math.sin(i*0.9) + 0.5*Math.sin(i*2.3));
+    baseShape[i] = clamp(env * detail, 0.18, 1);
+    const bar = document.createElement('span');
+    bar.className = 'fis-player__bar';
+    document.getElementById('fisWave').appendChild(bar); bars.push(bar);
+  }
+  const TRACK_H = 30;
+  let lProgress = 0, lPlaying = false, lRaf = null, lLast = 0, lResetTimer = null;
+
+  function paintWave(now){
+    const t = (now||0)/1000;
+    const playhead = lProgress * BAR_COUNT;
+    for(let i=0;i<BAR_COUNT;i++){
+      const played = i < playhead;
+      bars[i].classList.toggle('is-on', played);
+      let frac = baseShape[i];
+      if(lPlaying){
+        // ripple: oscillate, strongest around the playhead (the "live" sound)
+        const near = Math.max(0, 1 - Math.abs(i - playhead) / 7);
+        const osc  = 0.65 + 0.35*Math.sin(t*7 + i*0.7);
+        const vol  = 0.55 + 0.45*Math.abs(Math.sin(t*1.6 + 0.5));   // global volume envelope
+        frac *= (0.4 + 0.6*near) * osc * (0.6 + 0.4*vol);
+      } else {
+        frac *= 0.9;                       // frozen when paused
+      }
+      bars[i].style.height = (3 + clamp(frac,0,1) * (TRACK_H-3)).toFixed(1) + 'px';
+    }
+  }
+  function paintWords(){                        // karaoke fill tracks the audio
+    const spoken = Math.round(lProgress * quoteWords.length);
+    for(let i=0;i<quoteWords.length;i++) quoteWords[i].classList.toggle('is-spoken', i < spoken);
+  }
+  function listenStep(now){
+    if(lLast === 0) lLast = now;
+    lProgress += (now - lLast) / LISTEN_DUR; lLast = now;
+    if(lProgress >= 1){ lProgress = 1; paintWave(now); paintWords(); finishListen(); return; }
+    paintWave(now); paintWords();
+    lRaf = requestAnimationFrame(listenStep);
+  }
+  function playListen(){
+    clearTimeout(lResetTimer);
+    if(lProgress >= 1) lProgress = 0;          // replay from the start
+    lPlaying = true; lLast = 0;
+    player.classList.add('is-open','is-playing');
+    quoteEl.classList.add('is-listening');     // dim the quote, fill as it plays
+    lRaf = requestAnimationFrame(listenStep);
+  }
+  function pauseListen(){                       // freeze where it is
+    lPlaying = false; player.classList.remove('is-playing');
+    if(lRaf){ cancelAnimationFrame(lRaf); lRaf = null; }
+    paintWave(0);
+  }
+  function finishListen(){                      // whole quote read → back to the line
+    lPlaying = false; player.classList.remove('is-playing');
+    quoteEl.classList.remove('is-listening');
+    if(lRaf){ cancelAnimationFrame(lRaf); lRaf = null; }
+    lResetTimer = setTimeout(resetListen, 1600);
+  }
+  function resetListen(){
+    lPlaying = false; lProgress = 0;
+    if(lRaf){ cancelAnimationFrame(lRaf); lRaf = null; }
+    clearTimeout(lResetTimer);
+    player.classList.remove('is-open','is-playing');
+    quoteEl.classList.remove('is-listening');
+    quoteWords.forEach(w => w.classList.remove('is-spoken'));
+    paintWave(0);
+  }
+  playBtn.addEventListener('click', ()=>{ lPlaying ? pauseListen() : playListen(); });
+  player.addEventListener('pointerenter', ()=>{ setLabel('Listen'); cursor.classList.add('is-hover'); });
+  player.addEventListener('pointerleave', ()=>{ cursor.classList.remove('is-hover'); });
+
+  // ---- Init & resize -----------------------------------------------------
+  function activate(){
+    if(isMobile()){ stopLoop(); clearTransforms(); return; }
+    layoutHomes(true);
+    if(reduceMotion){ stopLoop(); writeStatic(); }
+    else startLoop();
+  }
+
+  build();
+  layoutHomes(true);
+  activate();
+
+  let rt;
+  window.addEventListener('resize', ()=>{
+    clearTimeout(rt);
+    rt = setTimeout(activate, 150);
+  });
+})();
+</script>
+</body>
+</html>

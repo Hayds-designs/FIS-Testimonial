@@ -1,0 +1,15 @@
+{
+  "name": "fis-testimonial",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "FIS — floating testimonials prototype",
+  "scripts": {
+    "dev": "npx serve . -l 3000",
+    "build": "vite build",
+    "preview": "vite preview --port 5274 --strictPort"
+  },
+  "devDependencies": {
+    "vite": "^7.0.0"
+  }
+}

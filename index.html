@@ -47,21 +47,19 @@
   --ink:#1d1f48;           /* navy — headings, quotes, names */
   --muted:#5b5d74;         /* softened navy for subtext */
   --green:#4bcd3e;         /* accent: rings, glow, cursor dot/button */
-  --green-ink:#2f9e28;     /* deeper green for role text (legible on light) */
-  --green-deep:#22781d;    /* darkest green for the cursor label */
+  --green-ink:#2f9e28;     /* deeper green: counter accent + focus ring */
   --violet:#1d1f48;        /* navy — quote mark, Listen button + waveform */
-  --blue:#2e70e0;          /* secondary gradient tint */
-  --white:#ffffff;
-  --ring-gap:#ffffff;      /* separates the active ring from the photo */
-  --disc:#e4e6ee;          /* light placeholder before a photo loads */
+  --disc:#e4e6ee;          /* light placeholder before a video loads */
   --disc-edge:#d0d3df;
 
   --font:'Roobert','Roobert Trial VF',-apple-system,BlinkMacSystemFont,
          'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
 
   --pop-dur:600ms;
-  --pop-step:110ms;        /* stagger between circles on load */
-  --nudge:11px;            /* how far the active disc pulls inward */
+  --split:54%;                      /* left column (lede) / right (card) */
+  --gutter:clamp(18px,2vw,36px);    /* top/bottom inset from the panel edges */
+  --gutter-x:80px;                  /* left/right margin of the whole section */
+  --card-max:800px;                 /* card stops growing here */
 
   font-family:var(--font);
   box-sizing:border-box;
@@ -80,55 +78,137 @@
   width:100%;
   height:100%;                      /* fit to whatever screen it's viewed on */
   overflow:hidden;
-  background:
-    radial-gradient(120% 90% at 82% 10%, rgba(75,205,62,0.16), transparent 46%),
-    radial-gradient(120% 120% at 8% 98%, rgba(46,112,224,0.15), transparent 52%),
-    linear-gradient(150deg,#ffffff 0%, #f3f4f9 46%, #e8eaf2 100%);
+  /* Base only — the colour comes from the drifting blobs in .fis-bg. */
+  background:linear-gradient(150deg,#ffffff 0%, #f3f4f9 46%, #e8eaf2 100%);
   isolation:isolate;
 }
 
-/* ---- Brand logo, top-centre --------------------------------- */
-.fis-logo{
-  position:absolute; top:28px; left:50%; transform:translateX(-50%);
-  height:40px; width:auto; z-index:4; pointer-events:none;
+/* ---- Moving background gradient ----------------------------------------
+   The FIS Job hero treatment, retinted light: soft blurred colour blobs over
+   the white/grey base. Each blob's transform (constant drift + cursor warp +
+   breathing scale) is driven per-frame in JS, so there is deliberately no CSS
+   animation here — one would override the inline transform. ------------- */
+.fis-bg{
+  position:absolute; inset:-15%;
+  z-index:0; pointer-events:none;
+  filter:blur(70px) saturate(1.15);
+}
+.fis-blob{
+  position:absolute; border-radius:50%;
+  will-change:transform;
+}
+/* Blue, upper-left — the cool half of the field. */
+.fis-blob--a{
+  width:78vmax; height:78vmax; left:-20%; top:-26%;
+  background:radial-gradient(circle at center,
+    rgba(46,112,224,0.30) 0%, rgba(46,112,224,0) 70%);
+}
+/* Brand green, right side. */
+.fis-blob--b{
+  width:72vmax; height:72vmax; right:-22%; top:-8%;
+  background:radial-gradient(circle at center,
+    rgba(75,205,62,0.30) 0%, rgba(75,205,62,0) 68%);
+}
+/* Teal carried over from the Job hero, low-centre. */
+.fis-blob--c{
+  width:64vmax; height:64vmax; left:24%; bottom:-32%;
+  background:radial-gradient(circle at center,
+    rgba(18,112,122,0.20) 0%, rgba(18,112,122,0) 66%);
 }
 
-/* ---- Centre content (no card background — text floats on the panel) - */
-.fis-stage{
-  position:absolute; top:50%; left:50%;
-  transform:translate(-50%,-50%);
-  z-index:2;
-  width:min(62%,600px);
-  text-align:center;
-  padding:26px 30px;
-  pointer-events:none;              /* only the Listen button is clickable */
+/* ---- Right-hand card: frosted white panel carrying the quote, player,
+       attribution and the person's facts. The circles live in the left
+       column (.fis-intro), the card in the right. -------------------- */
+/* The deck owns the position: it spans the right-hand column, inset from the
+   panel edges and centred, growing to the available height up to --card-max.
+   Every card fills it, offset back by --stack. */
+.fis-deck{
+  position:absolute; z-index:2;
+  top:50%; left:var(--split); right:var(--gutter-x);
+  transform:translateY(-50%);
+  height:calc(100% - 2*var(--gutter));
+  max-height:var(--card-max);
+  --stack-step:22px;      /* right-shift per card, as in the Job card stack */
+  --stack-max:3;          /* cards behind the front one */
 }
-.fis-stage .fis-player{ pointer-events:auto; }
-.fis-stage__inner{
-  transition:opacity .22s ease, transform .22s ease;
+/* Cards share a box that stops short of the deck's right edge by exactly the
+   depth of the stack, so the ones behind fill that reserved strip instead of
+   eating into the section's right margin.
+   --stack is the number of steps a card sits behind the front one, set from JS;
+   changing it is what physically moves the cards. --card-surface comes from the
+   data, so per-card colours can come back without touching this. */
+.fis-card{
+  position:absolute;
+  top:0; bottom:0; left:0;
+  right:calc(var(--stack-max) * var(--stack-step));
+  display:flex; flex-direction:column;
+  text-align:left;
+  padding:clamp(26px,2.4vw,42px);
+  border-radius:22px;
+  /* The whole card is the "Next" control, so it shouldn't behave like a block
+     of copy: without this, a quick second click lands as a double-click and
+     highlights a word instead of advancing. */
+  -webkit-user-select:none; user-select:none;
+  background:var(--card-surface,#FFFFFF);
+  border:1px solid rgba(29,31,72,0.06);
+  box-shadow:0 30px 60px -34px rgba(29,31,72,0.42);
+  transform:translateX(calc(var(--stack,0) * var(--stack-step)))
+            scale(calc(1 - var(--stack,0) * 0.045));
+  z-index:calc(10 - var(--stack,0));
+  transition:transform .55s cubic-bezier(.22,.61,.36,1);
 }
-.fis-stage__inner.is-leaving{ opacity:0; transform:translateY(-8px); }
-.fis-stage__inner.is-entering{ opacity:0; transform:translateY(12px); transition:none; }
+/* Only the front card is interactive; the rest are scenery until they arrive. */
+.fis-card:not(.is-front){ pointer-events:none; }
+/* Copy on the cards behind fades back so the stack reads as edges, not as four
+   competing blocks of text. */
+.fis-card__inner{
+  flex:1 1 auto; min-height:0; overflow-y:auto;
+  display:flex; flex-direction:column; justify-content:center;
+  opacity:0; transition:opacity .3s ease;
+}
+.fis-card.is-front .fis-card__inner{ opacity:1; }
+.fis-card:not(.is-front) .fis-progress{ opacity:0; transition:opacity .3s ease; }
+
+/* ---- Progress row on the card floor — the 01 / 04 treatment from the
+       FIS Job benefits cards. ------------------------------------------ */
+.fis-progress{
+  flex:none;
+  display:flex; align-items:flex-end; justify-content:space-between;
+  gap:16px;
+  padding-top:24px;
+  color:var(--ink);
+  --progress-size:clamp(0.72rem,0.85vw,0.9rem);
+}
+.fis-progress__label{
+  display:inline-flex; align-items:center; gap:0.6rem;
+  text-transform:uppercase;
+  letter-spacing:0.22em;
+  font-size:var(--progress-size);
+  font-weight:500;
+}
+.fis-progress__label .dot{
+  width:0.45rem; height:0.45rem; border-radius:50%;
+  background:var(--green);
+}
+.fis-progress__counter{
+  font-size:var(--progress-size);
+  font-weight:500;
+  letter-spacing:0.04em;
+  font-variant-numeric:tabular-nums;
+  white-space:nowrap;
+}
+.fis-progress__counter .current{ color:var(--green-ink); }
+.fis-progress__counter .sep{ opacity:0.5; }
 
 .fis-quote-mark{ display:inline-block; line-height:0; margin-bottom:14px; }
 .fis-quote-mark svg{ height:20px; width:auto; display:block; fill:var(--violet); }
-
-.fis-heading{
-  margin:0; color:var(--ink);
-  font-weight:300; letter-spacing:-0.01em; line-height:1.12;
-  font-size:clamp(1.35rem,2.6vw,2.15rem);
-}
-.fis-sub{
-  margin:14px 0 0; color:var(--muted);
-  font-weight:400; line-height:1.5;
-  font-size:clamp(0.82rem,1.15vw,0.98rem);
-}
 
 .fis-quote{
   margin:0; color:var(--ink);
   font-weight:300; letter-spacing:-0.01em;
   line-height:1.34;
-  font-size:clamp(1.2rem,2.5vw,1.95rem);
+  /* Base ramp was 1.1rem / 1.75vw / 1.6rem — 8px added at every stop. */
+  font-size:clamp(calc(1.1rem + 8px), calc(1.75vw + 8px), calc(1.6rem + 8px));
 }
 /* While the audio "plays", words light up in sequence (karaoke-style). */
 .fis-quote .fis-word{ transition:color .4s ease; }
@@ -140,27 +220,39 @@
   font-size:clamp(0.9rem,1.3vw,1.02rem);
 }
 .fis-role{
-  color:var(--green-ink); font-weight:500; letter-spacing:0.02em;
+  color:rgba(29,31,72,0.5);        /* navy 50%, matching the facts labels */
+  font-weight:500; letter-spacing:0.02em;
   font-size:clamp(0.72rem,1vw,0.82rem);
   text-transform:uppercase;
 }
 
-/* Mode toggling inside the safe zone */
-.fis-stage__inner[data-mode="intro"] .fis-quote-mark,
-.fis-stage__inner[data-mode="intro"] .fis-quote,
-.fis-stage__inner[data-mode="intro"] .fis-attr,
-.fis-stage__inner[data-mode="intro"] .fis-player{ display:none; }
-.fis-stage__inner[data-mode="quote"] .fis-heading,
-.fis-stage__inner[data-mode="quote"] .fis-sub{ display:none; }
+/* ---- Facts list: label/value pairs under the player. Labels use the
+       navy-50% sub-heading style from the FIS Job fixed card. -------- */
+.fis-facts{
+  margin:26px 0 0; padding-top:22px;
+  border-top:1px solid rgba(29,31,72,0.1);
+  display:flex; flex-direction:column; gap:16px;
+}
+.fis-facts dt{
+  text-transform:uppercase;
+  letter-spacing:0.14em;
+  font-size:0.72rem;
+  font-weight:500;
+  color:rgba(29,31,72,0.5);        /* navy 50% */
+  margin-bottom:0.35rem;
+}
+.fis-facts dd{
+  margin:0; color:var(--ink);
+  font-size:0.95rem; line-height:1.5;
+}
 
-/* ---- Audio player: just a round play button at rest. On play the button
-       slides left and a rippling waveform grows in beside it. ---------- */
+/* ---- Audio player: a round play button beside a grey waveform. The bars are
+       always visible so the control reads as audio before it's touched; they
+       fill navy behind the playhead and ripple while playing. ----------- */
 .fis-player{
   margin-top:26px;
-  display:inline-flex; align-items:center; gap:0;   /* centred via parent text-align */
-  transition:gap .3s ease;
+  display:flex; align-items:center; gap:14px;
 }
-.fis-player.is-open{ gap:14px; }
 .fis-player__btn{
   -webkit-appearance:none; appearance:none; border:0; cursor:pointer;
   flex:none; width:40px; height:40px; border-radius:50%;
@@ -174,22 +266,27 @@
 .fis-player__btn .fis-ic-pause{ display:none; }
 .fis-player.is-playing .fis-player__btn .fis-ic-play{ display:none; }
 .fis-player.is-playing .fis-player__btn .fis-ic-pause{ display:block; margin-left:0; }
-/* the waveform: collapsed at rest, grows in on play */
+/* the waveform: grey and visible at rest, sized to the space beside the button */
 .fis-player__wave{
   display:flex; align-items:center; gap:2px;
-  height:32px; width:320px; max-width:0; opacity:0; overflow:hidden;
-  transition:max-width .38s cubic-bezier(.4,0,.2,1), opacity .3s ease;
+  height:32px;
+  flex:1 1 auto; min-width:0; max-width:320px;
+  overflow:hidden;
 }
-.fis-player.is-open .fis-player__wave{ max-width:320px; opacity:1; }
 .fis-player__bar{
   flex:1 1 auto; height:4px; border-radius:2px;
-  background:rgba(29,31,72,0.22);
+  background:rgba(29,31,72,0.22);          /* grey until the playhead passes */
+  transition:background-color .25s ease;
 }
 .fis-player__bar.is-on{ background:var(--violet); }
 
-/* ---- Cursor follower: a green dot trailing the pointer that expands
-       into a "Meet [name]" button over a profile. Trails the native
-       cursor (it does not replace it). --------------------------------- */
+/* ---- Cursor follower: a frosted-green dot trailing the pointer that
+       expands into a labelled pill over anything marked with
+       [data-cursor-label]. Trails the native cursor (it does not
+       replace it). Shared treatment with the FIS Job project. -------- */
+/* Fields that expand the custom cursor into a labelled pill. */
+[data-cursor-label]{ cursor:pointer; }
+
 .fis-cursor{
   position:absolute; top:0; left:0; z-index:5;
   transform:translate(var(--cx,-200px), var(--cy,-200px));
@@ -198,123 +295,328 @@
   will-change:transform;
 }
 .fis-cursor.is-visible{ opacity:1; }
-/* Sits below-right of the native pointer so both stay visible. */
+/* Sits below-right of the native pointer so both stay visible. A softened
+   translucent green (frosted via backdrop blur) rather than solid green; an
+   8px corner radius so the expanded pill reads as a rounded rectangle (the
+   12px resting dot stays circular since the radius exceeds its half-size). */
 .fis-cursor__pill{
   position:absolute; left:16px; top:16px;
   display:flex; align-items:center;
   width:auto; min-width:12px; max-width:12px; height:12px; padding:0;
-  border-radius:999px; background:var(--green);
+  border-radius:8px; background:rgba(75,205,62,0.5);
+  -webkit-backdrop-filter:blur(4px);
+  backdrop-filter:blur(4px);
   overflow:hidden; white-space:nowrap;
-  box-shadow:0 3px 10px rgba(75,205,62,0.4);
   transition:max-width .28s cubic-bezier(.4,0,.2,1),
              height .22s ease, padding .22s ease, top .22s ease;
 }
 .fis-cursor__label{
-  color:#fff; font-weight:500; font-size:0.82rem; letter-spacing:0.01em;
+  /* px, not rem: the cursor is chrome, so it shouldn't scale with the copy. */
+  color:var(--ink); font-weight:500; font-size:15px; letter-spacing:0.01em;
   opacity:0; transition:opacity .18s ease;
 }
-/* Expanded button state on profile hover. */
+/* Expanded pill state on hover of [data-cursor-label] elements. */
 .fis-cursor.is-hover .fis-cursor__pill{
-  height:34px; max-width:260px; padding:0 16px; top:5px;
+  height:38px; max-width:280px; padding:0 18px; top:3px;
 }
 .fis-cursor.is-hover .fis-cursor__label{ opacity:1; }
+/* White label over a dark surface. */
+.fis-cursor.on-dark .fis-cursor__label{ color:#fff; }
 /* Expand leftward when near the right edge. */
 .fis-cursor.flip .fis-cursor__pill{ left:auto; right:16px; }
 
-/* ---- Orbit nodes (the scattered circles) -------------------- */
-/* Sits below the quote card (z-index 2) so any circle that drifts
-   toward the centre tucks neatly behind it. */
-.fis-orbit{ position:absolute; inset:0; z-index:1; }
-
-/* Position is driven by JS physics (transform on .fis-node); the inner
-   layers own pop-in scale and hover/active scale so nothing collides. */
-.fis-node{
-  position:absolute; left:0; top:0;
-  width:var(--size); height:var(--size);
-  will-change:transform;
+/* ---- Left column: the lede, with the video circles set inline in the
+       sentence as an overlapping cluster. ---------------------------- */
+.fis-intro{
+  position:absolute; top:50%;
+  left:var(--gutter-x);
+  width:calc(var(--split) - var(--gutter-x));
+  transform:translateY(-50%);
+  padding-right:clamp(16px,2.4vw,48px);
+  z-index:1;
 }
-/* pop-in wrapper (runs once on load) */
-.fis-node__pop{
-  width:100%; height:100%;
-  opacity:0; transform:scale(0.6);
-  animation:fis-pop var(--pop-dur) cubic-bezier(.34,1.56,.64,1) forwards;
+.fis-lede{
+  margin:0; color:var(--ink);
+  font-weight:300; letter-spacing:-0.025em;
+  /* Tighter leading now it's display-scale, but still roomy enough that the
+     inline circles, which stand a little proud of the caps, don't crowd the
+     line beneath them. */
+  line-height:1.14;
+  /* Doubled from 3.4vw / 3.3rem. The vh term matters at this size: on a short
+     window the sentence wraps to four or five lines, and without it the block
+     would grow past the panel and get clipped. The floor is deliberately below
+     half — it only applies to cramped widths, where doubling would overflow. */
+  font-size:clamp(2.4rem, min(6.8vw, 11vh), 6.6rem);
+}
+/* Each sentence part is its own line, so the name and the circles sit on a line
+   of their own between the other two. */
+.fis-lede__row{ display:block; }
+.fis-lede__row:last-child{ text-wrap:balance; }
+
+/* The name swaps as circles are selected. It animates in rather than fading out
+   first, so the text is already correct when the roll measures its new layout —
+   a name of a different width shifts the circles along with it. Its `order` is
+   set from JS to place it just after the active circle. */
+.fis-nameslot{
+  flex:none;
+  color:var(--green-ink);
+  margin:0 0.18em;                    /* the word gaps either side of the name */
+  white-space:nowrap;
+}
+/* The name has two homes: in the circle row on desktop, where it slots between
+   the circles, and in the heading text on mobile, where the circles drop below
+   the whole heading and can't carry it. JS keeps both in step; only one shows. */
+.fis-nameslot--flow{ display:none; margin:0; }
+.fis-nameslot.is-new{ animation:fis-name-in .34s ease both; }
+@keyframes fis-name-in{
+  from{ opacity:0; transform:translateY(0.1em); }
+  to{ opacity:1; transform:none; }
+}
+
+/* The row holding the circles and the name. A flex line of its own, so the name
+   can be ordered between the circles; align-items centres the name's text on the
+   circles without needing the old vertical-align trick. Sized in em so
+   everything tracks the headline. Each circle laps the one before it. */
+.fis-faces{
+  display:flex; align-items:center;
+  /* The row is name + four circles, so it's wider than a line of text and can
+     outgrow the column on a narrow window. Wrapping is a safety valve — better
+     than the last circle sliding under the card and being clipped. */
+  flex-wrap:wrap;
+  /* Part-room for circles shifting rightward (a transform can't push anything
+     aside). Only a fraction of --part: the full amount is only needed when the
+     last circle is the one parting, and reserving it all costs column width the
+     row hasn't got to spare. */
+  padding-right:calc(var(--part) * 0.6);
+  /* At least as tall as the largest a circle ever gets. Without this the row
+     would take its height from its tallest child, and mid-swap the circles pass
+     through an in-between size — the row would shrink and the line below would
+     jump up and drop back. Constant either way: the name's line box wins at
+     large sizes, this floor wins at small ones. */
+  min-height:calc(var(--face) + var(--grow));
+  /* Cap height is ~0.72em, so this sits a little proud of the letters top and
+     bottom — matching the reference cluster. */
+  --face:0.95em;                      /* base circle, before the two deltas */
+  /* The selected circle is 16px bigger, the others 24px smaller — both measured
+     off --face, so changing one doesn't move the other. Each min() only bites
+     once the circles are small (narrow windows, mobile), where a flat pixel
+     delta would swamp the diameter; at desktop headline sizes they resolve to
+     exactly 16px and 24px. */
+  --grow:min(16px, calc(var(--face) * 0.18));
+  --shrink:min(24px, calc(var(--face) * 0.27));
+  --lap:0.30;                         /* fraction of a circle that overlaps */
+  /* How far neighbours part on hover: past the overlap, with enough margin to
+     clear the selected circle at its grown size too. */
+  --part:calc(var(--face) * var(--lap) * 1.35);
+}
+.fis-face{
+  position:relative;
+  flex:none;
+  /* font:inherit is load-bearing, not tidiness: these are <button>s, which do
+     NOT inherit font-size, so an em width would otherwise resolve against the
+     UA's ~13px control font instead of the headline. */
+  font:inherit;
+  -webkit-appearance:none; appearance:none;
+  /* Unselected size; the active one below grows instead. Animating width/height
+     rather than scaling keeps the deltas genuinely in pixels at any headline
+     size — a scale factor couldn't, since calc() can't divide by a length. The
+     two sizes are complementary (one grows by exactly what the other loses), so
+     the cluster's total width holds steady mid-transition and the sentence
+     around it never jitters. */
+  width:calc(var(--face) - var(--shrink));
+  height:calc(var(--face) - var(--shrink));
+  border-radius:50%;
+  overflow:hidden;                    /* clips the video to a circle */
+  border:0; padding:0;
+  /* Left-most on top: --z descends along the row (set from JS), so each circle
+     laps over the one to its right. */
+  z-index:var(--z,1);
+  /* --dx is the part direction (-1 / 0 / 1) set on hover; --h is the hover
+     nudge. Both are transform-only, so nothing reflows the sentence. */
+  transform:translateX(calc(var(--dx,0) * var(--part))) scale(var(--h,1));
+  transition:transform .45s cubic-bezier(.22,.61,.36,1),
+             width .45s cubic-bezier(.22,.61,.36,1),
+             height .45s cubic-bezier(.22,.61,.36,1),
+             box-shadow .3s ease;
+  /* pop-in on load */
+  animation:fis-pop var(--pop-dur) cubic-bezier(.34,1.56,.64,1) backwards;
   animation-delay:var(--pop-delay);
 }
-/* the visible avatar disc */
-.fis-node__disc{
-  position:relative;
-  width:100%; height:100%; border-radius:50%;
-  overflow:hidden;                                     /* clips the video to a circle */
-  background:radial-gradient(120% 120% at 32% 28%,var(--disc),var(--disc-edge));
+.fis-face + .fis-face{ margin-left:calc(var(--face) * -1 * var(--lap)); }
+/* The circle that ends up visually after the name must not lap backwards over
+   it — the negative margin above is keyed on document order, which no longer
+   matches display order once the name is slotted in. */
+.fis-face.is-after-name{ margin-left:0; }
+/* Transitions are suppressed for the frame in which the roll measures the new
+   layout, so the circles can be pinned back to their old positions first. */
+.fis-faces.is-rolling .fis-face{ transition:none; }
+
+/* The clickable video circles. */
+.fis-face--video{
   cursor:pointer;
-  transition:transform .3s ease, box-shadow .3s ease;
-  box-shadow:0 12px 26px -14px rgba(29,31,72,0.55);
+  background:radial-gradient(120% 120% at 32% 28%,var(--disc),var(--disc-edge));
+  box-shadow:0 10px 22px -14px rgba(29,31,72,0.55);
 }
-.fis-node__video{
+/* Raised above its neighbours as well as nudged: the circles to its left don't
+   move aside, so without this the one on top would clip the hovered face. */
+.fis-face--video:hover{ --h:1.05; z-index:30; }
+.fis-face--video:focus-visible{
+  outline:2px solid var(--green-ink); outline-offset:3px;
+}
+.fis-face__video{
   position:absolute; inset:0;
   width:100%; height:100%;
-  object-fit:cover;                                    /* fill the circle */
-  display:block; pointer-events:none;                  /* disc handles events */
-  transition:opacity .8s ease;                         /* crossfade at loop seam */
+  object-fit:cover;                   /* fill the circle */
+  display:block; pointer-events:none; /* the button handles events */
+  transition:opacity .8s ease;        /* crossfade at loop seam */
 }
-.fis-node__disc:hover{ transform:scale(1.07); }
-.fis-node.is-active .fis-node__disc{
-  transform:scale(1.12);
-  box-shadow:0 0 0 3px var(--ring-gap),
-             0 0 0 5px var(--green),
-             0 0 24px 3px rgba(75,205,62,0.55);
+/* Selected: clicking brings the circle to the very top of the overlap, above
+   the descending --z order. No stroke or glow — just a slightly deeper lift;
+   the card and the 01 / 04 counter carry the state. */
+.fis-face--video.is-active{
+  z-index:20;
+  width:calc(var(--face) + var(--grow));
+  height:calc(var(--face) + var(--grow));
+  box-shadow:0 14px 28px -14px rgba(29,31,72,0.6);
 }
 @keyframes fis-pop{
   from{ opacity:0; transform:scale(0.6); }
-  to{ opacity:1; transform:scale(1); }
+  to{ opacity:1; transform:translateX(calc(var(--dx,0) * var(--part))) scale(var(--h,1)); }
 }
 
 /* ============================================================
-   Mobile fallback (< 640px): drop the scatter, stack a simple
-   row of circles beneath the quote.
+   Mobile (< 640px): drop the side-by-side split. Heading first,
+   then the row of people, then every testimonial card stacked
+   down the page — no deck, since there's no room to fan one.
    ============================================================ */
 @media (max-width:640px){
+  /* The section is as tall as its content here, rather than being pinned to the
+     viewport — pinned, any shortfall showed as dead space under the cards. The
+     page scrolls instead of the panel, so overflow stays hidden (it's still
+     clipping the gradient blobs) and no inner scroll container appears. */
+  html,body{ height:auto; }
+  .fis-testimonial{ height:auto; }
   .fis-panel{
-    min-height:0;
+    height:auto; min-height:0;
     display:flex; flex-direction:column;
-    justify-content:center; align-items:center;
-    padding:36px 20px 30px;
+    justify-content:flex-start; align-items:center;
+    padding:32px 16px 32px;
     gap:26px;
     cursor:auto;
   }
   .fis-cursor{ display:none; }
-  .fis-stage{
+  /* flex:none on both children is load-bearing. The panel is a flex column at
+     exactly viewport height, so by default its items shrink to fit — which
+     squeezed the deck, and the cards stretch to the deck, so their copy got cut
+     off mid-card. Sized to their content instead, the panel overflows and
+     scrolls, and the heading and people row scroll away with it. */
+  .fis-intro{
     position:static; transform:none;
-    width:100%; max-width:420px;
-    padding:0;
+    flex:none;
+    width:100%; max-width:460px;
+    padding-right:0;
+  }
+  .fis-lede{
+    font-size:clamp(1.5rem,6.4vw,2rem);
+    /* Flex so the circle row can be ordered after both sentences. */
+    display:flex; flex-direction:column; align-items:flex-start;
+  }
+  /* Name comes from the heading text here, not the circle row. */
+  .fis-nameslot--flow{ display:inline; }
+  .fis-nameslot--row{ display:none; }
+  .fis-faces{
+    /* After both sentences of the heading. The other two rows keep the default
+       order:0, so they fall in document order ahead of this one. */
+    order:99;
+    width:100%;
+    /* Left-aligned so the first circle lines up with the heading and the card
+       carousel, all 16px from the screen edge (the panel's padding). */
+    justify-content:flex-start;
+    margin:0.6em 0 0;
+    padding-right:0;
+    /* Free of the text now, so sized in px rather than tracking the type. No
+       overlap either: these are tap targets here, not a decorative cluster, so
+       they get real space between them. --part falls out at 0 with --lap:0,
+       which is right — nothing needs to part when nothing overlaps. */
+    --face:72px;
+    --lap:0;
+    gap:12px;
+  }
+
+  /* Cards become a swipeable carousel — one card at a time with the next
+     peeking, snapping as you swipe. Kept in step with the face row both ways
+     (see the scroll handler in JS). */
+  .fis-deck{
+    position:static; transform:none;
+    top:auto; left:auto; right:auto;
+    flex:none;                        /* see .fis-intro above */
+    /* Bleeds the full viewport so the carousel can scroll edge to edge, then
+       sets its own 16px inset. The panel centres it, and 100vw overhangs the
+       panel's padding by exactly that padding on each side, so no negative
+       margins are needed. */
+    width:100vw; max-width:100vw;
+    height:auto; max-height:none;
+    display:flex; flex-direction:row; gap:12px;
+    overflow-x:auto;
+    /* 16px from the screen edge. scroll-padding matters as much as padding:
+       without it every card after the first would snap flush to the edge. */
+    padding-inline:16px;
+    scroll-padding-inline:16px;
+    /* overflow-x:auto forces the vertical axis to auto too, which clips — this
+       leaves room for the cards' drop shadow rather than shearing it off flat.
+       Must be at least the shadow's reach (offset + blur − spread) below. */
+    padding-block:6px 26px;
+    scroll-snap-type:x mandatory;
+    -webkit-overflow-scrolling:touch;
+    overscroll-behavior-x:contain;
+    scrollbar-width:none;
+  }
+  .fis-deck::-webkit-scrollbar{ display:none; }
+  .fis-card{
+    position:static; transform:none;
+    top:auto; left:auto; right:auto; bottom:auto;
+    /* Sized so exactly 8px of the next card peeps past the right edge:
+       100% is the deck's content box (screen − 2×16px inset), and taking off
+       4px leaves 8px visible once the 12px gap is accounted for. Exact at any
+       screen width, unlike a percentage.
+       Snapping to `start` rather than `center` keeps every card's left edge on
+       the same 16px line — centring can't do that for the first and last. */
+    flex:0 0 calc(100% - 4px);
+    scroll-snap-align:start;
+    /* Tighter than the desktop shadow so it fits inside the deck's padding —
+       reach here is 6+18-10 = 14px, well under the 26px below. */
+    box-shadow:0 6px 18px -10px rgba(29,31,72,0.3);
+    width:auto;
+    height:auto; max-height:none;
+    padding:24px;
+  }
+  /* Every card is a real card here, not a peeking edge. */
+  .fis-card:not(.is-front){ pointer-events:auto; }
+  .fis-card:not(.is-front) .fis-progress{ opacity:1; }
+  /* Only the carousel scrolls. On desktop the card is a fixed height and its
+     copy scrolls inside; here the card grows to fit instead, so the inner needs
+     its scroll container behaviour undone — min-height:auto stops it shrinking
+     below its content, which is what made a scrollbar necessary. */
+  .fis-card__inner{
+    opacity:1;
+    overflow:visible;
+    min-height:auto;
   }
   /* Slightly larger quote text on mobile */
-  .fis-quote{ font-size:clamp(1.4rem,6vw,1.7rem); }
-  .fis-orbit{
-    position:static; inset:auto;
-    display:flex; flex-wrap:wrap; gap:14px;
-    justify-content:center; align-items:center;
-  }
-  .fis-node{
-    position:static;
-    left:auto; top:auto; margin:0;
-    /* Fixed px (beats each node's inline --size) for a tidy, uniform row. */
-    width:74px; height:74px;
-  }
+  .fis-quote{ font-size:clamp(1.25rem,5vw,1.5rem); }
   /* Player + waveform fill the mobile width instead of overflowing */
-  .fis-player{ width:100%; justify-content:center; }
-  .fis-player__wave{ width:auto; flex:1 1 auto; }
-  .fis-player.is-open .fis-player__wave{ max-width:100%; }
+  .fis-player{ width:100%; }
+  .fis-player__wave{ max-width:100%; }
 }
 
 /* ============================================================
-   Reduced motion — cheap courtesy: no pop, no float, no draw.
+   Reduced motion — cheap courtesy: no pop, no drift, no draw.
    ============================================================ */
 @media (prefers-reduced-motion:reduce){
-  .fis-node__pop{ animation:none; opacity:1; transform:none; }
-  .fis-stage__inner{ transition:opacity .2s ease; }
-  .fis-stage__inner.is-leaving{ transform:none; }
-  .fis-stage__inner.is-entering{ transform:none; }
+  .fis-face{ animation:none; opacity:1; }
+  /* Cards still restack (that's the state change, not decoration) but they
+     cut rather than glide. */
+  .fis-card{ transition:none; }
 }
 
 /* Standalone review page framing (not part of the component) */
@@ -331,31 +633,29 @@ body{
 
 <div class="fis-testimonial">
   <div class="fis-panel" id="fisPanel">
-    <img class="fis-logo" src="images/fis-logo.svg" alt="FIS" />
-
-    <div class="fis-stage">
-      <div class="fis-stage__inner" id="fisInner" data-mode="intro">
-        <span class="fis-quote-mark" aria-hidden="true">
-          <svg viewBox="0 0 512 379.51"><path d="M212.27 33.98C131.02 56.52 78.14 103.65 64.99 185.67c-3.58 22.32 1.42 5.46 16.55-5.86 49.4-36.96 146.53-23.88 160.01 60.56 27.12 149.48-159.79 175.36-215.11 92.8-12.87-19.19-21.39-41.59-24.46-66.19C-11.35 159.99 43.48 64.7 139.8 19.94c17.82-8.28 36.6-14.76 56.81-19.51 10.12-2.05 17.47 3.46 20.86 12.77 2.87 7.95 3.85 16.72-5.2 20.78zm267.78 0c-81.25 22.54-134.14 69.67-147.28 151.69-3.58 22.32 1.42 5.46 16.55-5.86 49.4-36.96 146.53-23.88 160 60.56 27.13 149.48-159.78 175.36-215.1 92.8-12.87-19.19-21.39-41.59-24.46-66.19C256.43 159.99 311.25 64.7 407.58 19.94 425.4 11.66 444.17 5.18 464.39.43c10.12-2.05 17.47 3.46 20.86 12.77 2.87 7.95 3.85 16.72-5.2 20.78z"/></svg>
-        </span>
-        <blockquote class="fis-quote" id="fisQuote"></blockquote>
-        <div class="fis-attr">
-          <span class="fis-name" id="fisName"></span>
-          <span class="fis-role" id="fisRole"></span>
-        </div>
-        <div class="fis-player" id="fisPlayer">
-          <button class="fis-player__btn" id="fisPlayBtn" type="button" aria-label="Play">
-            <svg class="fis-ic-play" viewBox="0 0 12 14" aria-hidden="true"><path d="M0 0l12 7L0 14z"/></svg>
-            <svg class="fis-ic-pause" viewBox="0 0 12 14" aria-hidden="true"><rect x="1" y="0" width="3.5" height="14" rx="1"/><rect x="7.5" y="0" width="3.5" height="14" rx="1"/></svg>
-          </button>
-          <span class="fis-player__wave" id="fisWave" aria-hidden="true"></span>
-        </div>
-        <h2 class="fis-heading" id="fisTitle">Hear from the people at FIS</h2>
-        <p class="fis-sub" id="fisSub">Each circle is someone behind the work. Pick one to explore.</p>
-      </div>
+    <div class="fis-bg" id="fisBg" aria-hidden="true">
+      <span class="fis-blob fis-blob--a"></span>
+      <span class="fis-blob fis-blob--b"></span>
+      <span class="fis-blob fis-blob--c"></span>
     </div>
 
-    <div class="fis-orbit" id="fisOrbit"></div>
+    <div class="fis-intro">
+      <h2 class="fis-lede">
+        <span class="fis-lede__row">Hear from<span class="fis-nameslot fis-nameslot--flow" id="fisNameFlow"> Daniel.</span></span>
+        <!-- The name is a flex sibling of the circles, not a separate block: it
+             slots in immediately after whichever circle is active, so the people
+             keep their fixed left-to-right order and only the name moves. -->
+        <span class="fis-lede__row fis-faces" id="fisFaces">
+          <span class="fis-nameslot fis-nameslot--row" id="fisNameSlot">Daniel.</span>
+        </span>
+        <span class="fis-lede__row">One of the people who move the world&rsquo;s money.</span>
+      </h2>
+    </div>
+
+    <!-- One real card per person, built from the template below. They share a
+         grid cell and physically rotate: --stack is the number of steps each
+         card sits behind the front one. -->
+    <div class="fis-deck" id="fisDeck"></div>
 
     <div class="fis-cursor" id="fisCursor" aria-hidden="true">
       <span class="fis-cursor__pill"><span class="fis-cursor__label"></span></span>
@@ -363,67 +663,118 @@ body{
   </div>
 </div>
 
+<!-- Card shell, cloned once per person. Everything inside is addressed by
+     class, never id, since there are four copies of it in the deck. -->
+<template id="fisCardTpl">
+  <div class="fis-card" data-cursor-label="Next">
+    <div class="fis-card__inner">
+      <span class="fis-quote-mark" aria-hidden="true">
+        <svg viewBox="0 0 512 379.51"><path d="M212.27 33.98C131.02 56.52 78.14 103.65 64.99 185.67c-3.58 22.32 1.42 5.46 16.55-5.86 49.4-36.96 146.53-23.88 160.01 60.56 27.12 149.48-159.79 175.36-215.11 92.8-12.87-19.19-21.39-41.59-24.46-66.19C-11.35 159.99 43.48 64.7 139.8 19.94c17.82-8.28 36.6-14.76 56.81-19.51 10.12-2.05 17.47 3.46 20.86 12.77 2.87 7.95 3.85 16.72-5.2 20.78zm267.78 0c-81.25 22.54-134.14 69.67-147.28 151.69-3.58 22.32 1.42 5.46 16.55-5.86 49.4-36.96 146.53-23.88 160 60.56 27.13 149.48-159.78 175.36-215.1 92.8-12.87-19.19-21.39-41.59-24.46-66.19C256.43 159.99 311.25 64.7 407.58 19.94 425.4 11.66 444.17 5.18 464.39.43c10.12-2.05 17.47 3.46 20.86 12.77 2.87 7.95 3.85 16.72-5.2 20.78z"/></svg>
+      </span>
+      <blockquote class="fis-quote"></blockquote>
+      <div class="fis-attr">
+        <span class="fis-name"></span>
+        <span class="fis-role"></span>
+      </div>
+      <div class="fis-player" data-cursor-label="Listen">
+        <button class="fis-player__btn" type="button" aria-label="Play">
+          <svg class="fis-ic-play" viewBox="0 0 12 14" aria-hidden="true"><path d="M0 0l12 7L0 14z"/></svg>
+          <svg class="fis-ic-pause" viewBox="0 0 12 14" aria-hidden="true"><rect x="1" y="0" width="3.5" height="14" rx="1"/><rect x="7.5" y="0" width="3.5" height="14" rx="1"/></svg>
+        </button>
+        <span class="fis-player__wave" aria-hidden="true"></span>
+      </div>
+      <dl class="fis-facts"></dl>
+    </div>
+
+    <div class="fis-progress">
+      <span class="fis-progress__label"><span class="dot"></span>Meet the team</span>
+      <span class="fis-progress__counter">
+        <span class="current"></span><span class="sep"></span>
+      </span>
+    </div>
+  </div>
+</template>
+
 <script>
 (function(){
-  // --- Data per testimonial. `video` is the looping clip shown in the
-  //     circle (paused on a still frame until hovered or active).
+  // --- Data per testimonial. `video` is the looping clip shown in the circle
+  //     (paused on a still frame until hovered or fronted). `based`, `building`
+  //     and `flow` fill the card's facts list; `role` shows under the name.
   const testimonials = [
     { id:'payments', name:'Daniel Reyes', role:'VP, Payments Platform',
       quote:'We move money for millions of people a day, and I still get a lift knowing a payment landed exactly when someone needed it.',
+      based:'Jacksonville, United States',
+      building:'Real-time rails that settle a payment before the customer has put their phone away.',
+      flow:'Early starts, a quiet office and the first coffee of the day.',
+      surface:'#FFFFFF',
       video:'videos/payments.mp4' },
     { id:'banking', name:'Amara Okafor', role:'Head of Core Banking',
       quote:'Modernising a bank’s core is rarely glamorous, but watching a decades-old system suddenly feel effortless makes it worth it.',
+      based:'London, United Kingdom',
+      building:'A migration path that moves a bank off its mainframe without a single day of downtime.',
+      flow:'Afrobeats turned up and a whiteboard nobody else is allowed to touch.',
+      surface:'#FFFFFF',
       video:'videos/banking.mp4' },
     { id:'design', name:'Kai Nakamura', role:'Lead Product Designer',
       quote:'My job is to make something genuinely complex feel like it was always meant to be this simple. The best design here is invisible.',
+      based:'Berlin, Germany',
+      building:'A design system that keeps four hundred screens feeling like one product.',
+      flow:'Long walks, longer playlists and a sketchbook that never leaves my bag.',
+      surface:'#FFFFFF',
       video:'videos/design.mp4' },
     { id:'risk', name:'Ellen Marsh', role:'Director, Risk & Data',
       quote:'The best risk work happens quietly in the background, turning a wall of data into a decision someone can actually trust.',
+      based:'Atlanta, United States',
+      building:'AI-powered solutions that help our clients make faster, more confident decisions.',
+      flow:'Lo-fi beats and one too many coffees.',
+      surface:'#FFFFFF',
       video:'videos/risk.mp4' }
   ];
 
-  // --- Avatar layout (parallel to testimonials): centre point in % of
-  //     the panel, disc diameter in px. Larger discs than before, still
-  //     asymmetric with varied size and distance from centre.
-  const avatarLayout = [
-    { x:15, y:29, size:230 },  // payments — featured, top-left
-    { x:84, y:23, size:176 },  // banking  — top-right
-    { x:85, y:70, size:200 },  // design   — lower-right
-    { x:18, y:76, size:152 }   // risk     — bottom-left
+  // The card's facts list, in order. Each entry pulls its value off the
+  // testimonial. No "Current role" — the role already sits under the name.
+  const FACTS = [
+    ['Based in',          t => t.based],
+    ['Currently building',t => t.building],
+    ['Finding my flow',   t => t.flow]
   ];
 
-  const orbit     = document.getElementById('fisOrbit');
-  const inner     = document.getElementById('fisInner');
-  const quoteEl   = document.getElementById('fisQuote');
-  const nameEl    = document.getElementById('fisName');
-  const roleEl    = document.getElementById('fisRole');
+  const faces     = document.getElementById('fisFaces');
+  const nameSlot  = document.getElementById('fisNameSlot');   // in the circle row
+  const nameFlow  = document.getElementById('fisNameFlow');   // in the heading text
+  const nameSlots = [nameSlot, nameFlow];
+  const deck      = document.getElementById('fisDeck');
+  const cardTpl   = document.getElementById('fisCardTpl');
   const panel     = document.getElementById('fisPanel');
   const cursor    = document.getElementById('fisCursor');
   const labelEl   = cursor.querySelector('.fis-cursor__label');
-  const player    = document.getElementById('fisPlayer');
-  const playBtn   = document.getElementById('fisPlayBtn');
 
   const clamp = (v,a,b)=> v<a?a : v>b?b : v;
+  const pad = n => String(n).padStart(2,'0');
   const isMobile = ()=> window.matchMedia('(max-width:640px)').matches;
   const reduceMotion = window.matchMedia('(prefers-reduced-motion:reduce)').matches;
 
-  let W = 0, H = 0;
-  let activeCircle = null;
-  let quoteWords = [];              // per-word spans for the karaoke fill
-  const circles = [];
+  // One entry per person, pairing the inline face with its card in the deck.
+  const items = [];
+  let active = -1;                  // index of the front card
 
-  // ---- Cursor state (drives the follower + the physics repulsion) --------
-  let curX = -999, curY = -999, cursorOver = false;
+  // ---- Cursor state ------------------------------------------------------
+  // The follower is positioned in panel space (px/py); the gradient blob warp
+  // works in viewport space (vpx/vpy). Both come off the one event.
+  let cursorOver = false;
+  let px = -999, py = -999;                         // pointer, panel space
+  let vpx = 0, vpy = 0;                             // pointer, viewport space
   let fx = -999, fy = -999;                         // eased follower position
   panel.addEventListener('pointermove', (e)=>{
     if(e.pointerType !== 'mouse') return;          // desktop pointer only
     const r = panel.getBoundingClientRect();
-    curX = e.clientX - r.left;
-    curY = e.clientY - r.top;
+    px = e.clientX - r.left;
+    py = e.clientY - r.top;
+    vpx = e.clientX; vpy = e.clientY;              // blob warp works in page space
     cursorOver = true;
-    if(!cursor.classList.contains('is-visible')){ fx = curX; fy = curY; }  // snap in
+    if(!cursor.classList.contains('is-visible')){ fx = px; fy = py; }  // snap in
     cursor.classList.add('is-visible');
-    cursor.classList.toggle('flip', curX > r.width - 200);   // keep label on-screen
+    cursor.classList.toggle('flip', px > r.width - 200);   // keep label on-screen
   });
   panel.addEventListener('pointerleave', ()=>{
     cursorOver = false;
@@ -431,55 +782,158 @@ body{
   });
   // Follower trails the pointer with a slight delay (eased each frame).
   (function followTick(){
-    fx += (curX - fx) * 0.16;
-    fy += (curY - fy) * 0.16;
+    fx += (px - fx) * 0.16;
+    fy += (py - fy) * 0.16;
     cursor.style.setProperty('--cx', fx.toFixed(1) + 'px');
     cursor.style.setProperty('--cy', fy.toFixed(1) + 'px');
     requestAnimationFrame(followTick);
   })();
   function setLabel(txt){ labelEl.textContent = txt; }
 
-  // ---- Build the avatar circles ------------------------------------------
-  function addNode(cfg){
-    const node = document.createElement('div');
-    node.className = 'fis-node';
-    node.style.setProperty('--size', cfg.size + 'px');
-    node.style.setProperty('--pop-delay', cfg.popDelay.toFixed(2) + 's');
+  // Hover-expand via delegation so it also covers dynamically-added elements
+  // (the avatar discs are built at runtime). Any element carrying
+  // [data-cursor-label] expands the pill and supplies its text; add
+  // [data-cursor-dark] on a dark surface to flip the label to white.
+  let labelSource = null;           // element currently supplying the label
+  panel.addEventListener('pointerover', (e)=>{
+    const t = e.target.closest && e.target.closest('[data-cursor-label]');
+    if(t){
+      labelSource = t;
+      setLabel(t.getAttribute('data-cursor-label'));
+      cursor.classList.toggle('on-dark', !!t.closest('[data-cursor-dark]'));
+      cursor.classList.add('is-hover');
+    }
+  });
+  // Re-read the label from whatever is hovered. Needed when an element's label
+  // changes while the pointer is already over it (Listen → Pause).
+  function refreshCursorLabel(){
+    if(labelSource) setLabel(labelSource.getAttribute('data-cursor-label'));
+  }
+  panel.addEventListener('pointerout', (e)=>{
+    const t = e.target.closest && e.target.closest('[data-cursor-label]');
+    if(!t || t.contains(e.relatedTarget)) return;
+    // Labels nest now (the player sits inside the card), so moving from one to
+    // another should let the incoming pointerover swap the text rather than
+    // collapsing the pill for a frame in between.
+    const to = e.relatedTarget && e.relatedTarget.closest &&
+               e.relatedTarget.closest('[data-cursor-label]');
+    if(to) return;
+    if(labelSource === t) labelSource = null;
+    cursor.classList.remove('is-hover');
+  });
 
-    const pop  = document.createElement('div'); pop.className = 'fis-node__pop';
-    const disc = document.createElement('div');
-    disc.className = 'fis-node__disc';
+  // ---- Build the inline cluster ------------------------------------------
+  // A real <button> per face: they're the section's primary control, so they
+  // need keyboard focus and a name.
+  function addFace(t, i, popDelay){
+    const el = document.createElement('button');
+    el.type = 'button';
+    el.className = 'fis-face fis-face--video';
+    el.style.setProperty('--pop-delay', popDelay.toFixed(2) + 's');
+    // Descending, so the left-most circle laps over the one to its right. Static
+    // now that the people keep a fixed order — only the name moves.
+    el.style.setProperty('--z', testimonials.length - i);
+    el.setAttribute('data-cursor-label', 'Meet ' + t.name);
+    el.setAttribute('aria-label', 'Meet ' + t.name + ', ' + t.role);
 
     // Two stacked videos crossfade at the loop seam (no hard cut).
-    const vc = makeVideos(disc, cfg.t.video);
+    const vc = makeVideos(el, t.video);
+    faces.appendChild(el);
 
-    pop.appendChild(disc); node.appendChild(pop); orbit.appendChild(node);
-
-    const r = cfg.size / 2;
-    const c = {
-      el:node, kind:cfg.kind, t:cfg.t || null, vc, hovered:false,
-      r, mass:r*r, push:clamp(22/r, 0.22, 1.55),
-      xPct:cfg.xPct, yPct:cfg.yPct,
-      homeX:0, homeY:0, x:0, y:0, vx:0, vy:0, offX:0, offY:0,
-      phase:(circles.length * 1.7) % 6.283
+    el.addEventListener('click', ()=> select(i));
+    // The cursor pill comes from the [data-cursor-label] delegation above;
+    // these drive the video play state and part the neighbouring circles.
+    const hover = on => ()=>{
+      items[i].hovered = on;
+      updateVideo(items[i]);
+      // Hovering parts around this circle; letting go returns the gap to the
+      // selected one rather than closing the cluster flat.
+      part(on ? i : active);
     };
-    disc.addEventListener('click', ()=> select(c));
-    disc.addEventListener('pointerenter', ()=>{
-      c.hovered = true; setLabel('Meet ' + cfg.t.name); cursor.classList.add('is-hover');
-      updateVideo(c);
-    });
-    disc.addEventListener('pointerleave', ()=>{
-      c.hovered = false; cursor.classList.remove('is-hover');
-      updateVideo(c);
-    });
-    circles.push(c);
+    el.addEventListener('pointerenter', hover(true));
+    el.addEventListener('pointerleave', hover(false));
+    el.addEventListener('focus', hover(true));
+    el.addEventListener('blur',  hover(false));
+    return { el, vc };
   }
 
-  // Play while hovered or active (quote showing); otherwise pause the frame.
-  function updateVideo(c){
-    if(!c.vc) return;
-    if(c.hovered || c === activeCircle) c.vc.play();
-    else c.vc.pause();
+  // The people hold a fixed left-to-right order; it's the name that moves,
+  // slotting in immediately to the right of whichever person is active. Circles
+  // take even `order` values so there's always an odd slot between any two for
+  // the name to occupy — the same trick as the FIS Job benefits timeline.
+  function applyOrder(){
+    items.forEach((it,j)=>{
+      it.el.style.order = j * 2;
+      // The circle that lands after the name shouldn't lap back over it.
+      it.el.classList.toggle('is-after-name', j === active + 1);
+    });
+    nameSlot.style.order = active * 2 + 1;
+  }
+
+  // Opens a gap beside circle `idx` by sliding everything to its right further
+  // right. Only rightward: the circle in question is raised above its
+  // neighbours anyway, so it's already seen whole, and shifting the left-hand
+  // ones out too would need dead margin reserved before the row.
+  function part(idx){
+    items.forEach((it,j)=>{
+      it.el.style.setProperty('--dx', (idx == null || idx < 0 || j <= idx) ? 0 : 1);
+    });
+  }
+  // Leaving the cluster hands the gap back to the selected circle. Needed
+  // because with circles overlapping, the pointer can exit through a gap
+  // between two of them without firing a leave on either.
+  faces.addEventListener('pointerleave', ()=> part(active));
+
+  // The name that follows "Hear from". Set before the roll measures anything —
+  // a longer or shorter name moves the cluster, and the roll needs to animate to
+  // the final position, not an intermediate one.
+  function setName(t){
+    // The full stop lives inside the slot so it takes the green with the name,
+    // and rides the same entry animation instead of sitting there unchanged.
+    // Both placements are written, since which one is visible is up to CSS.
+    const txt = t.name.split(' ')[0] + '.';
+    nameSlots.forEach(el=>{
+      el.textContent = el === nameFlow ? ' ' + txt : txt;
+      el.classList.remove('is-new');
+    });
+    void nameSlot.offsetWidth;              // restart the entry animation
+    nameSlots.forEach(el => el.classList.add('is-new'));
+  }
+
+  // FLIP: `before` holds each circle's rect from prior to the reorder. By now the
+  // new layout is in place, so pin every circle back to where it was, then let
+  // it travel. The spin is derived from the distance covered over the
+  // circumference, so each circle rolls the right amount for how far it goes
+  // rather than spinning by some arbitrary angle.
+  function roll(before){
+    // No spin on mobile: there the circles are a plain left-aligned row that
+    // only resizes, so rolling them reads as a glitch rather than a gesture.
+    const spinning = !isMobile();
+    faces.classList.add('is-rolling');      // measure with transitions off
+    const after = items.map(it => it.el.getBoundingClientRect());
+    items.forEach((it,j)=>{
+      const dx = before[j].left - after[j].left;
+      const w  = after[j].width || 1;
+      const sc = before[j].width / w;       // size change rides along as a scale
+      if(Math.abs(dx) < 0.5 && Math.abs(sc - 1) < 0.005){
+        it.el.style.transform = '';
+        return;
+      }
+      const spin = spinning ? (dx / (w * Math.PI)) * 360 : 0;
+      it.el.style.transform =
+        `translateX(${dx.toFixed(1)}px) scale(${sc.toFixed(3)}) rotate(${spin.toFixed(1)}deg)`;
+    });
+    requestAnimationFrame(()=>{
+      faces.classList.remove('is-rolling');
+      items.forEach(it => { it.el.style.transform = ''; });
+    });
+  }
+
+  // Play while hovered or fronted; otherwise hold the frame.
+  function updateVideo(it){
+    if(!it || !it.vc) return;
+    if(it.hovered || items.indexOf(it) === active) it.vc.play();
+    else it.vc.pause();
   }
 
   // Two-video crossfade controller: near the end of the front clip, the back
@@ -488,7 +942,7 @@ body{
   function makeVideos(disc, src){
     function mk(){
       const v = document.createElement('video');
-      v.className = 'fis-node__video';
+      v.className = 'fis-face__video';
       v.src = src; v.muted = true; v.playsInline = true; v.preload = 'auto';
       v.setAttribute('muted',''); v.setAttribute('playsinline','');
       disc.appendChild(v);
@@ -523,212 +977,327 @@ body{
     };
   }
 
+  // ---- Build: one face + one real card per person -------------------------
   function build(){
-    orbit.innerHTML = '';
-    circles.length = 0;
-    const STAGGER = 0.14;                  // clearer one-by-one pop-in
+    // Remove only the circles — the name slot is a sibling of theirs inside this
+    // same row, and clearing the row wholesale would delete it.
+    faces.querySelectorAll('.fis-face').forEach(el => el.remove());
+    deck.innerHTML = '';
+    items.length = 0;
+    const STAGGER = 0.09;
+    const total = ' / ' + pad(testimonials.length);
+
     testimonials.forEach((t,i)=>{
-      const L = avatarLayout[i];
-      addNode({ kind:'avatar', t, size:L.size, xPct:L.x, yPct:L.y, popDelay:i*STAGGER });
+      const card = cardTpl.content.firstElementChild.cloneNode(true);
+      card.style.setProperty('--card-surface', t.surface);
+      card.querySelector('.fis-quote').innerHTML = t.quote.split(' ')
+        .map(w => `<span class="fis-word">${w}</span>`).join(' ');
+      card.querySelector('.fis-name').textContent = t.name;
+      card.querySelector('.fis-role').textContent = t.role;
+      card.querySelector('.fis-facts').innerHTML = FACTS
+        .map(([label, get]) => `<div><dt>${label}</dt><dd>${get(t)}</dd></div>`)
+        .join('');
+      card.querySelector('.fis-progress__counter .current').textContent = pad(i+1);
+      card.querySelector('.fis-progress__counter .sep').textContent = total;
+      deck.appendChild(card);
+
+      const face = addFace(t, i, i * STAGGER);
+      items.push({
+        t, card, el:face.el, vc:face.vc, hovered:false,
+        player: makePlayer(card)
+      });
     });
   }
 
-  // ---- Home positions & stage geometry (recomputed on resize) ------------
-  function layoutHomes(resetPos){
-    const r = panel.getBoundingClientRect();
-    W = r.width; H = r.height;
-    for(const c of circles){
-      c.homeX = c.xPct/100 * W;
-      c.homeY = c.yPct/100 * H;
-      if(resetPos){ c.x = c.homeX; c.y = c.homeY; c.vx = 0; c.vy = 0; }
+  // ---- Selection: the deck physically rotates. --stack is each card's number
+  //     of steps behind the front one, so advancing sends the front card to the
+  //     back of the stack and walks the rest forward — same as the FIS Job
+  //     sticky card section.
+  function layoutDeck(){
+    const n = items.length;
+    items.forEach((it,j)=>{
+      const stack = (j - active + n) % n;
+      it.card.style.setProperty('--stack', stack);
+      it.card.classList.toggle('is-front', stack === 0);
+      it.card.setAttribute('aria-hidden', stack === 0 ? 'false' : 'true');
+    });
+  }
+
+  function select(i){
+    if(i === active) return;
+    const prev = active;
+    // Capture where the circles are before anything moves, for the roll.
+    const before = items.map(it => it.el.getBoundingClientRect());
+
+    active = i;
+    if(prev >= 0){
+      items[prev].el.classList.remove('is-active');
+      items[prev].player.reset();      // don't leave audio running on a card that left
+      updateVideo(items[prev]);        // and stop its clip unless still hovered
     }
-  }
-  // ---- Selection: rings the active photo. The quote card only exists on
-  //     mobile, where setContent populates it; on desktop it's the ring alone.
-  function select(c){
-    if(c === activeCircle) return;
-    const prev = activeCircle;
-    if(prev) prev.el.classList.remove('is-active');
-    activeCircle = c;
-    c.el.classList.add('is-active');
-    if(prev) updateVideo(prev);       // stop the previously active clip (unless hovered)
-    updateVideo(c);                   // play the newly active one
-    setContent('quote', c.t);
-  }
+    items[i].el.classList.add('is-active');
+    updateVideo(items[i]);
+    layoutDeck();
 
-  // Swap centre copy with the fade-out / slide-up-in transition.
-  function setContent(mode, t){
-    resetListen();                    // clear any in-progress playback
-    inner.classList.add('is-leaving');
-    setTimeout(()=>{
-      inner.dataset.mode = mode;
-      if(mode === 'quote' && t){
-        quoteEl.innerHTML = t.quote.split(' ')
-          .map(w => `<span class="fis-word">${w}</span>`).join(' ');
-        quoteWords = [...quoteEl.querySelectorAll('.fis-word')];
-        nameEl.textContent = t.name;
-        roleEl.textContent = t.role;
-      }
-      inner.classList.remove('is-leaving');
-      inner.classList.add('is-entering');
-      requestAnimationFrame(()=>requestAnimationFrame(()=>{
-        inner.classList.remove('is-entering');
-      }));
-    }, 180);
+    // New name and new display order — both change the layout the circles are
+    // rolling towards, so they land before the roll measures it.
+    setName(items[i].t);
+    applyOrder();
+    // Hold the gap open beside the newly selected circle. Skipped while the
+    // pointer is over a different circle, which is already borrowing it.
+    if(!items.some(it => it.hovered)) part(i);
+
+    // Nothing to roll from on first paint — the circles are still popping in.
+    if(prev >= 0) roll(before);
+    // Mobile: bring the matching card into view, unless this selection came
+    // from the user swiping there in the first place.
+    if(!fromScroll) scrollToCard(i, prev >= 0);
   }
 
-  // ---- Physics -----------------------------------------------------------
-  const K_SPRING = 0.02, FRICTION = 0.86, CURSOR_R = 165,
-        CURSOR_STR = 2.4, IMPULSE = 0.35, GAP = 3, MAX_V = 24, DRIFT = 12;
+  // Clicking the front card advances, wrapping back to the first. No selection
+  // guard here: the card is user-select:none, so a stray selection can only have
+  // come from outside it — checking would just block legitimate clicks.
+  deck.addEventListener('click', (e)=>{
+    if(e.target.closest('.fis-player')) return;        // the player owns its clicks
+    // On mobile the deck is a carousel — swiping moves between cards, so a tap
+    // shouldn't also advance it.
+    if(isMobile()) return;
+    if(items.length) select((active + 1) % items.length);
+  });
 
-  function step(now){
-    const t = now / 1000;
-    // forces
-    for(const c of circles){
-      // gently drifting home target → always-on subtle float (mass-independent)
-      const driftX = Math.sin(t*0.45 + c.phase) * DRIFT;
-      const driftY = Math.cos(t*0.37 + c.phase*1.3) * DRIFT;
-      c.vx += (c.homeX + c.offX + driftX - c.x) * K_SPRING;
-      c.vy += (c.homeY + c.offY + driftY - c.y) * K_SPRING;
-      if(cursorOver){
-        const dx = c.x - curX, dy = c.y - curY, R = CURSOR_R + c.r;
-        const d = Math.hypot(dx,dy);
-        if(d < R){
-          const f = (1 - d/R) * CURSOR_STR * c.push, dd = d || 0.001;
-          c.vx += (dx/dd) * f; c.vy += (dy/dd) * f;
+  // ---- Mobile carousel sync ----------------------------------------------
+  // Measured from live rects rather than offsetLeft: the deck's offsetParent
+  // differs between the two layouts, and rects don't care.
+  function centreOf(el){
+    const r = el.getBoundingClientRect();
+    return r.left + r.width / 2;
+  }
+  // Tapping a face brings its card into view. Aligned to the card's left edge to
+  // match scroll-snap-align:start — scrolling to its centre instead would land
+  // off a snap point and the browser would jerk it back.
+  // While that smooth scroll runs, the scroll handler must stay out of the way:
+  // it would otherwise pick whichever card is passing mid-flight and select it,
+  // so tapping the fourth face flickered through the second and third on the
+  // way. A user gesture clears the guard immediately, so a swipe always wins.
+  let quietScrollUntil = 0;
+  function scrollToCard(i, smooth){
+    if(!isMobile() || !items[i]) return;
+    const inset = parseFloat(getComputedStyle(deck).paddingLeft) || 0;
+    const delta = items[i].card.getBoundingClientRect().left -
+                  (deck.getBoundingClientRect().left + inset);
+    if(Math.abs(delta) < 1) return;
+    if(smooth) quietScrollUntil = performance.now() + 800;
+    deck.scrollBy({ left:delta, behavior:smooth ? 'smooth' : 'auto' });
+  }
+  ['touchstart','pointerdown','wheel'].forEach(ev=>{
+    deck.addEventListener(ev, ()=>{ quietScrollUntil = 0; }, { passive:true });
+  });
+
+  // Swiping the carousel updates the name and the active face. `fromScroll`
+  // stops select() from scrolling back and fighting the gesture.
+  let fromScroll = false;
+  deck.addEventListener('scroll', ()=>{
+    if(!isMobile() || !items.length) return;
+    if(performance.now() < quietScrollUntil) return;   // our own scroll, in flight
+    const mid = centreOf(deck);
+    let best = 0, bestD = Infinity;
+    items.forEach((it,j)=>{
+      const d = Math.abs(centreOf(it.card) - mid);
+      if(d < bestD){ bestD = d; best = j; }
+    });
+    if(best === active) return;
+    fromScroll = true;
+    select(best);
+    fromScroll = false;
+  }, { passive:true });
+
+  // ---- Moving background gradient ----------------------------------------
+  // Ported from the FIS Job hero: each blob gets a constant sine/cosine drift
+  // so the field is always moving, plus a cursor "warp" that pushes blobs away
+  // from the pointer with a distance falloff, and a slow breathing scale.
+  const bg = document.getElementById('fisBg');
+  const blobs = [...bg.querySelectorAll('.fis-blob')];
+  // Per-blob drift (amplitude in vmax, angular speed in rad/ms, phase), warp
+  // responsiveness, and breathing scale.
+  const BLOB_P = [
+    { ax:20, ay:16, sx:0.00040, sy:0.00050, phx:0.0, phy:1.7, warp:1.00, scA:0.10, scS:0.00026, scP:0.4 },
+    { ax:24, ay:14, sx:0.00034, sy:0.00044, phx:2.1, phy:0.6, warp:0.80, scA:0.09, scS:0.00022, scP:2.1 },
+    { ax:18, ay:22, sx:0.00046, sy:0.00038, phx:4.0, phy:3.2, warp:1.25, scA:0.11, scS:0.00030, scP:3.4 }
+  ];
+  const WARP_RADIUS = 0.5;     // × the larger viewport dimension
+  const WARP_STRENGTH = 9;     // vmax of push at the pointer
+
+  let vmaxPx = 1, warpR = 1, warpS = 1;
+  const blobBase = [];
+  function measureBlobs(){
+    vmaxPx = Math.max(window.innerWidth, window.innerHeight) / 100;
+    warpR  = WARP_RADIUS * Math.max(window.innerWidth, window.innerHeight);
+    warpS  = WARP_STRENGTH * vmaxPx;
+    blobs.forEach((b,i)=>{
+      const prev = b.style.transform;
+      b.style.transform = 'none';            // read the un-transformed centre
+      const r = b.getBoundingClientRect();
+      blobBase[i] = { x:r.left + r.width/2, y:r.top + r.height/2 };
+      b.style.transform = prev;
+    });
+  }
+
+  function startBg(){
+    if(reduceMotion || !blobs.length) return;   // keep the field static instead
+    measureBlobs();
+    const t0 = performance.now();
+    let bcx = window.innerWidth/2, bcy = window.innerHeight/2;
+    vpx = bcx; vpy = bcy;
+    (function bgTick(now){
+      const t = now - t0;
+      bcx += (vpx - bcx) * 0.08;               // ease toward the pointer
+      bcy += (vpy - bcy) * 0.08;
+      blobs.forEach((b,i)=>{
+        const p = BLOB_P[i];
+        const dx = Math.sin(t*p.sx + p.phx) * p.ax * vmaxPx;
+        const dy = Math.cos(t*p.sy + p.phy) * p.ay * vmaxPx;
+        const sc = 1 + Math.sin(t*p.scS + p.scP) * p.scA;
+        let wx = 0, wy = 0;
+        if(cursorOver){
+          const vx = (blobBase[i].x + dx) - bcx, vy = (blobBase[i].y + dy) - bcy;
+          const dist = Math.hypot(vx,vy) || 0.001;
+          const falloff = Math.max(0, 1 - dist/warpR);
+          const push = falloff * falloff * warpS * p.warp;
+          wx = (vx/dist) * push; wy = (vy/dist) * push;
         }
-      }
-    }
-    // collisions (every pair — cheap at this count)
-    for(let i=0;i<circles.length;i++){
-      for(let j=i+1;j<circles.length;j++){
-        const a = circles[i], b = circles[j];
-        const dx = b.x-a.x, dy = b.y-a.y, min = a.r+b.r+GAP;
-        const d = Math.hypot(dx,dy);
-        if(d < min && d > 0){
-          const nx = dx/d, ny = dy/d, overlap = min-d, tot = a.mass+b.mass;
-          a.x -= nx*overlap*(b.mass/tot); a.y -= ny*overlap*(b.mass/tot);
-          b.x += nx*overlap*(a.mass/tot); b.y += ny*overlap*(a.mass/tot);
-          a.vx -= nx*IMPULSE*b.push*0.5; a.vy -= ny*IMPULSE*b.push*0.5;
-          b.vx += nx*IMPULSE*a.push*0.5; b.vy += ny*IMPULSE*a.push*0.5;
-        } else if(d === 0){ a.x -= 1; b.x += 1; }
-      }
-    }
-    // integrate + soft walls + write transforms
-    for(const c of circles){
-      c.vx *= FRICTION; c.vy *= FRICTION;
-      c.vx = clamp(c.vx,-MAX_V,MAX_V); c.vy = clamp(c.vy,-MAX_V,MAX_V);
-      c.x += c.vx; c.y += c.vy;
-      if(c.x < c.r){ c.x = c.r; c.vx *= -0.4; }
-      else if(c.x > W-c.r){ c.x = W-c.r; c.vx *= -0.4; }
-      if(c.y < c.r){ c.y = c.r; c.vy *= -0.4; }
-      else if(c.y > H-c.r){ c.y = H-c.r; c.vy *= -0.4; }
-      c.el.style.transform = `translate(${(c.x-c.r).toFixed(2)}px, ${(c.y-c.r).toFixed(2)}px)`;
-    }
-    rafId = requestAnimationFrame(step);
+        b.style.transform =
+          `translate(${(dx+wx).toFixed(1)}px, ${(dy+wy).toFixed(1)}px) scale(${sc.toFixed(3)})`;
+      });
+      requestAnimationFrame(bgTick);
+    })(performance.now());
   }
-
-  let rafId = null;
-  function startLoop(){ if(rafId == null) rafId = requestAnimationFrame(step); }
-  function stopLoop(){ if(rafId != null){ cancelAnimationFrame(rafId); rafId = null; } }
-  function writeStatic(){                              // reduced-motion: place once
-    for(const c of circles) c.el.style.transform = `translate(${c.x-c.r}px, ${c.y-c.r}px)`;
-  }
-  function clearTransforms(){ for(const c of circles) c.el.style.transform = ''; }
 
   // ---- Audio player: progress line → rippling waveform (no real audio) ----
   const BAR_COUNT = 48, LISTEN_DUR = 20000;   // ~20s of pretend playback
-  const bars = [], baseShape = [];
+  const baseShape = [];
   for(let i=0;i<BAR_COUNT;i++){
-    // A calm, voice-like waveform shape (deterministic, 0.22–1).
+    // A calm, voice-like waveform shape (deterministic, 0.22–1). Shared by
+    // every card's wave, so it's computed once.
     const env = Math.sin((i/(BAR_COUNT-1)) * Math.PI);
     const detail = 0.55 + 0.45*Math.abs(Math.sin(i*0.9) + 0.5*Math.sin(i*2.3));
     baseShape[i] = clamp(env * detail, 0.18, 1);
-    const bar = document.createElement('span');
-    bar.className = 'fis-player__bar';
-    document.getElementById('fisWave').appendChild(bar); bars.push(bar);
   }
   const TRACK_H = 30;
-  let lProgress = 0, lPlaying = false, lRaf = null, lLast = 0, lResetTimer = null;
+  // While playing, a bar's amplitude is scaled by three terms: proximity to the
+  // playhead (0.4–1.0), a fast oscillation (0.30–1.0) and a slow volume
+  // envelope (0.82–1.0). STATIC_AMP is those terms at their mean values, so the
+  // resting/paused wave sits at the same visual height as the animated one
+  // rather than towering over it.
+  const STATIC_AMP = 0.5 * 0.65 * 0.94;        // ≈ 0.31
 
-  function paintWave(now){
-    const t = (now||0)/1000;
-    const playhead = lProgress * BAR_COUNT;
+  // One player per card, since every card carries its own quote and waveform.
+  // State is closed over rather than shared, so a card that rotates to the back
+  // can be reset without disturbing the one arriving at the front.
+  function makePlayer(card){
+    const player  = card.querySelector('.fis-player');
+    const wave    = card.querySelector('.fis-player__wave');
+    const quoteEl = card.querySelector('.fis-quote');
+    const words   = [...quoteEl.querySelectorAll('.fis-word')];
+
+    const bars = [];
     for(let i=0;i<BAR_COUNT;i++){
-      const played = i < playhead;
-      bars[i].classList.toggle('is-on', played);
-      let frac = baseShape[i];
-      if(lPlaying){
-        // ripple: oscillate, strongest around the playhead (the "live" sound)
-        const near = Math.max(0, 1 - Math.abs(i - playhead) / 7);
-        const osc  = 0.65 + 0.35*Math.sin(t*7 + i*0.7);
-        const vol  = 0.55 + 0.45*Math.abs(Math.sin(t*1.6 + 0.5));   // global volume envelope
-        frac *= (0.4 + 0.6*near) * osc * (0.6 + 0.4*vol);
-      } else {
-        frac *= 0.9;                       // frozen when paused
-      }
-      bars[i].style.height = (3 + clamp(frac,0,1) * (TRACK_H-3)).toFixed(1) + 'px';
+      const bar = document.createElement('span');
+      bar.className = 'fis-player__bar';
+      wave.appendChild(bar); bars.push(bar);
     }
+
+    let progress = 0, playing = false, raf = null, last = 0, resetTimer = null;
+
+    function paintWave(now){
+      const t = (now||0)/1000;
+      const playhead = progress * BAR_COUNT;
+      for(let i=0;i<BAR_COUNT;i++){
+        bars[i].classList.toggle('is-on', i < playhead);
+        let frac = baseShape[i];
+        if(playing){
+          // ripple: oscillate, strongest around the playhead (the "live" sound)
+          const near = Math.max(0, 1 - Math.abs(i - playhead) / 7);
+          const osc  = 0.65 + 0.35*Math.sin(t*7 + i*0.7);
+          const vol  = 0.55 + 0.45*Math.abs(Math.sin(t*1.6 + 0.5));   // global volume envelope
+          frac *= (0.4 + 0.6*near) * osc * (0.6 + 0.4*vol);
+        } else {
+          frac *= STATIC_AMP;                // frozen at the animated mean height
+        }
+        bars[i].style.height = (3 + clamp(frac,0,1) * (TRACK_H-3)).toFixed(1) + 'px';
+      }
+    }
+    function paintWords(){                   // karaoke fill tracks the audio
+      const spoken = Math.round(progress * words.length);
+      for(let i=0;i<words.length;i++) words[i].classList.toggle('is-spoken', i < spoken);
+    }
+    function step(now){
+      if(last === 0) last = now;
+      progress += (now - last) / LISTEN_DUR; last = now;
+      if(progress >= 1){ progress = 1; paintWave(now); paintWords(); finish(); return; }
+      paintWave(now); paintWords();
+      raf = requestAnimationFrame(step);
+    }
+    // The cursor pill takes its text from [data-cursor-label], so keep that in
+    // step with playback: hovering a playing player offers "Pause". The refresh
+    // matters when playback changes while the pointer is already over it.
+    function syncLabel(){
+      player.dataset.cursorLabel = playing ? 'Pause' : 'Listen';
+      refreshCursorLabel();
+    }
+    function play(){
+      clearTimeout(resetTimer);
+      if(progress >= 1) progress = 0;        // replay from the start
+      playing = true; last = 0;
+      player.classList.add('is-playing');
+      quoteEl.classList.add('is-listening'); // dim the quote, fill as it plays
+      raf = requestAnimationFrame(step);
+      syncLabel();
+    }
+    function pause(){                        // freeze where it is
+      playing = false; player.classList.remove('is-playing');
+      if(raf){ cancelAnimationFrame(raf); raf = null; }
+      paintWave(0);
+      syncLabel();
+    }
+    function finish(){                       // whole quote read → back to the line
+      playing = false; player.classList.remove('is-playing');
+      quoteEl.classList.remove('is-listening');
+      if(raf){ cancelAnimationFrame(raf); raf = null; }
+      resetTimer = setTimeout(reset, 1600);
+      syncLabel();
+    }
+    function reset(){
+      playing = false; progress = 0;
+      if(raf){ cancelAnimationFrame(raf); raf = null; }
+      clearTimeout(resetTimer);
+      player.classList.remove('is-playing');
+      quoteEl.classList.remove('is-listening');
+      words.forEach(w => w.classList.remove('is-spoken'));
+      paintWave(0);
+      syncLabel();
+    }
+
+    // On the whole player row, not just the button: the waveform reads as part
+    // of the control and already shows the Listen/Pause cursor, so it should be
+    // clickable too. The button's own clicks bubble up to here, so it keeps
+    // working for keyboard users without needing a second handler.
+    player.addEventListener('click', ()=> playing ? pause() : play());
+    paintWave(0);                            // resting waveform shape up front
+    syncLabel();
+    return { reset };
   }
-  function paintWords(){                        // karaoke fill tracks the audio
-    const spoken = Math.round(lProgress * quoteWords.length);
-    for(let i=0;i<quoteWords.length;i++) quoteWords[i].classList.toggle('is-spoken', i < spoken);
-  }
-  function listenStep(now){
-    if(lLast === 0) lLast = now;
-    lProgress += (now - lLast) / LISTEN_DUR; lLast = now;
-    if(lProgress >= 1){ lProgress = 1; paintWave(now); paintWords(); finishListen(); return; }
-    paintWave(now); paintWords();
-    lRaf = requestAnimationFrame(listenStep);
-  }
-  function playListen(){
-    clearTimeout(lResetTimer);
-    if(lProgress >= 1) lProgress = 0;          // replay from the start
-    lPlaying = true; lLast = 0;
-    player.classList.add('is-open','is-playing');
-    quoteEl.classList.add('is-listening');     // dim the quote, fill as it plays
-    lRaf = requestAnimationFrame(listenStep);
-  }
-  function pauseListen(){                       // freeze where it is
-    lPlaying = false; player.classList.remove('is-playing');
-    if(lRaf){ cancelAnimationFrame(lRaf); lRaf = null; }
-    paintWave(0);
-  }
-  function finishListen(){                      // whole quote read → back to the line
-    lPlaying = false; player.classList.remove('is-playing');
-    quoteEl.classList.remove('is-listening');
-    if(lRaf){ cancelAnimationFrame(lRaf); lRaf = null; }
-    lResetTimer = setTimeout(resetListen, 1600);
-  }
-  function resetListen(){
-    lPlaying = false; lProgress = 0;
-    if(lRaf){ cancelAnimationFrame(lRaf); lRaf = null; }
-    clearTimeout(lResetTimer);
-    player.classList.remove('is-open','is-playing');
-    quoteEl.classList.remove('is-listening');
-    quoteWords.forEach(w => w.classList.remove('is-spoken'));
-    paintWave(0);
-  }
-  playBtn.addEventListener('click', ()=>{ lPlaying ? pauseListen() : playListen(); });
-  player.addEventListener('pointerenter', ()=>{ setLabel('Listen'); cursor.classList.add('is-hover'); });
-  player.addEventListener('pointerleave', ()=>{ cursor.classList.remove('is-hover'); });
 
   // ---- Init & resize -----------------------------------------------------
-  function activate(){
-    if(isMobile()){ stopLoop(); clearTransforms(); return; }
-    layoutHomes(true);
-    if(reduceMotion){ stopLoop(); writeStatic(); }
-    else startLoop();
-  }
-
   build();
-  layoutHomes(true);
-  activate();
+  select(0);           // open on the first person, deck stacked behind them
+  startBg();
 
+  // The cluster is laid out by the text flow now, so only the gradient blobs
+  // need re-measuring when the window changes size.
   let rt;
   window.addEventListener('resize', ()=>{
     clearTimeout(rt);
-    rt = setTimeout(activate, 150);
+    rt = setTimeout(measureBlobs, 150);
   });
 })();
 </script>
